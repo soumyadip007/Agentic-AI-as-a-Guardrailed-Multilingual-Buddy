@@ -1,96 +1,110 @@
-# Install & run
+# Install & Run
 
 ## Prerequisites
 
-- Python **3.11+**
-- [Ollama](https://ollama.com) installed and running
-- At least one local chat model (this machine already has `llama3` and `codellama`)
+- **Python 3.11+**
+- **[Ollama](https://ollama.com)** installed and running — this is TL-Guard's default LLM backend (runs locally, no API key needed)
+- At least one Ollama model pulled (e.g., `llama3`)
 
-## 1. Clone and create a virtualenv
+## Step 1: Clone and set up the environment
 
 ```bash
 cd Agentic-AI-as-a-Guardrailed-Multilingual-Buddy
 python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev,docs]"
 ```
 
-## 2. Configure environment
+This installs TL-Guard as an editable package with the agent, API, UI, test suite, and MkDocs docs.
+
+## Step 2: Configure the LLM
 
 ```bash
 cp .env.example .env
 ```
 
-Default `.env`:
+The default `.env` points to Ollama:
 
 ```env
 TL_GUARD_LLM=ollama
 TL_GUARD_MODEL=llama3
 TL_GUARD_OLLAMA_BASE_URL=http://127.0.0.1:11434
-TL_GUARD_OLLAMA_TIMEOUT=120
 ```
 
-## 3. Verify Ollama
+Make sure Ollama is running and has a model:
 
 ```bash
-ollama serve          # if not already running
-ollama pull llama3    # if needed
+ollama serve           # if not already running
+ollama pull llama3     # if you have not pulled it yet
+```
+
+## Step 3: Verify everything works
+
+```bash
 tl-guard doctor
 ```
 
-`doctor` must print **OK** and a short probe reply from the model.
+This command:
 
-## 4. Run the product surfaces
+1. Prints your configured provider, model, and Ollama URL
+2. Lists models available on your Ollama instance
+3. Sends a one-sentence probe to verify the LLM responds
 
-=== "UI (recommended)"
+You should see **doctor: OK** with a short response from the model.
+
+## Step 4: Run
+
+=== "Streamlit UI (student + teacher)"
 
     ```bash
     streamlit run ui/app.py
     ```
+    
+    Opens at `http://localhost:8501`. Switch between Student and Teacher roles in the sidebar.
 
-    Open the Streamlit URL (usually `http://localhost:8501`).
-
-    - **Student** — multilingual tutoring chat  
-    - **Teacher** — LSM editor + escalation console  
-
-=== "CLI"
+=== "CLI demo"
 
     ```bash
-    tl-guard courses
-    tl-guard preview --language hi --mastery 0.3
-    tl-guard chat --course-id python_intro --concept loops
     tl-guard demo
     ```
+    
+    Runs a scripted three-turn demo: English question → Hindi clarification → adversarial extraction attempt.
 
-=== "API"
+=== "Interactive CLI chat"
+
+    ```bash
+    tl-guard chat --course-id python_intro --concept loops
+    ```
+
+=== "HTTP API"
 
     ```bash
     uvicorn api.main:app --reload --port 8000
-    # OpenAPI: http://127.0.0.1:8000/docs
     ```
+    
+    OpenAPI docs at `http://127.0.0.1:8000/docs`.
 
 === "Documentation site"
 
     ```bash
     mkdocs serve -a 127.0.0.1:8001
-    # http://127.0.0.1:8001
     ```
 
-## 5. Run tests
+## Step 5: Run tests
 
 ```bash
 pytest -q
 ```
 
-Unit tests inject a **FakeLLM** (test double only). Runtime always uses Ollama/OpenAI.
+Tests use a test-only FakeLLM (injected via `TLGuardAgent(llm=FakeLLM())`). Production code always calls Ollama or OpenAI.
 
 ## Troubleshooting
 
 | Symptom | Fix |
-|---------|-----|
-| `Cannot reach Ollama` | Start `ollama serve`; check `TL_GUARD_OLLAMA_BASE_URL` |
-| Model not listed | `ollama pull llama3` (or set `TL_GUARD_MODEL=codellama`) |
-| Slow first reply | First Ollama load pulls weights into memory — wait once |
-| Import errors | Activate `.venv` and re-run `pip install -e ".[dev,docs]"` |
+|---|---|
+| `LLMError: Cannot reach Ollama` | Run `ollama serve`. Check the URL in `.env`. |
+| Model not found | `ollama pull llama3` (or set `TL_GUARD_MODEL` to a model you have). |
+| Very slow first response | Normal — Ollama loads model weights into memory on first call. Subsequent calls are fast. |
+| `ModuleNotFoundError` | Activate `.venv` and re-run `pip install -e ".[dev,docs]"`. |
 
-Next: [Local LLM (Ollama)](llm-ollama.md) · [Complete workflow](workflow.md)
+Next: [Local LLM (Ollama)](llm-ollama.md) for backend details, or jump to the [Complete workflow](workflow.md).

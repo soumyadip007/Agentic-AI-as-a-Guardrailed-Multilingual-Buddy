@@ -2,14 +2,17 @@ course_id: general_science
 name: General Science
 description: Translanguaging-friendly science tutoring with stricter solution controls.
 default_language: en
-languages: [en, hi, bn, es, mixed]
-tiers: [T1, T2, T3, T4]
-topics:
-  - photosynthesis
-  - forces
-  - electricity
-  - cells
-  - water_cycle
+languages:
+- en
+- hi
+- bn
+- es
+- mixed
+tiers:
+- T1
+- T2
+- T3
+- T4
 matrix:
   en:
     T1: true
@@ -36,6 +39,12 @@ matrix:
     T2: true
     T3: false
     T4: false
+topics:
+- photosynthesis
+- forces
+- electricity
+- cells
+- water_cycle
 escalation:
   on_adversarial_intent: tighten
   on_leakage: rewrite

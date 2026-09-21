@@ -71,7 +71,9 @@ nav:
       - CLI: cli.md
       - HTTP API: api.md
       - Development: development.md
-  - Research: research.md
+  - Research:
+      - Context: research.md
+      - Paper: paper.md
 
 extra:
   social:
