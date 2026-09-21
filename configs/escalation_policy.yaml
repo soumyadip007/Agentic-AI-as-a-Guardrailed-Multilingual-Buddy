@@ -1,0 +1,13 @@
+name: default_escalation
+thresholds:
+  adversarial_confidence: 0.65
+  leakage_score: 0.5
+  over_disclosure_markers: 2
+actions:
+  warn: Log and continue with same tier
+  tighten: Drop authorized scaffold tier by one level
+  rewrite: Rewrite response to authorized tier
+  escalate: Queue for teacher review
+  block: Withhold response and request teacher review
+teacher_queue:
+  auto_escalate_after_consecutive_rewrites: 2

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Language-Scaffold Matrix",
+  "type": "object",
+  "required": ["course_id", "name", "languages", "tiers", "matrix"],
+  "properties": {
+    "course_id": { "type": "string" },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "default_language": { "type": "string", "default": "en" },
+    "languages": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "tiers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["T1", "T2", "T3", "T4"]
+      }
+    },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "T1": { "type": "boolean" },
+          "T2": { "type": "boolean" },
+          "T3": { "type": "boolean" },
+          "T4": { "type": "boolean" }
+        },
+        "required": ["T1", "T2", "T3", "T4"]
+      }
+    },
+    "topics": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "escalation": {
+      "type": "object",
+      "properties": {
+        "on_adversarial_intent": {
+          "type": "string",
+          "enum": ["warn", "tighten", "escalate", "block"]
+        },
+        "on_leakage": {
+          "type": "string",
+          "enum": ["rewrite", "escalate", "block"]
+        },
+        "on_policy_violation": {
+          "type": "string",
+          "enum": ["rewrite", "escalate", "block"]
+        }
+      }
+    }
+  }
+}

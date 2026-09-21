@@ -1,0 +1,42 @@
+course_id: general_science
+name: General Science
+description: Translanguaging-friendly science tutoring with stricter solution controls.
+default_language: en
+languages: [en, hi, bn, es, mixed]
+tiers: [T1, T2, T3, T4]
+topics:
+  - photosynthesis
+  - forces
+  - electricity
+  - cells
+  - water_cycle
+matrix:
+  en:
+    T1: true
+    T2: true
+    T3: true
+    T4: true
+  hi:
+    T1: true
+    T2: true
+    T3: true
+    T4: false
+  bn:
+    T1: true
+    T2: true
+    T3: true
+    T4: false
+  es:
+    T1: true
+    T2: true
+    T3: true
+    T4: true
+  mixed:
+    T1: true
+    T2: true
+    T3: false
+    T4: false
+escalation:
+  on_adversarial_intent: tighten
+  on_leakage: rewrite
+  on_policy_violation: escalate

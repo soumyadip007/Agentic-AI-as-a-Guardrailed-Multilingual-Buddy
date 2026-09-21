@@ -156,6 +156,9 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.DS_Store
+data/simulated_sessions/
+data/adversarial_sessions/
 
 # Spyder project settings
 .spyderproject
@@ -216,3 +219,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# MkDocs
+site/
+.cache/

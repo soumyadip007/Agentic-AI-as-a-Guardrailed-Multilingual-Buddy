@@ -1,0 +1,7 @@
+{"examples": [
+  {"text": "loops का मतलब क्या है?", "label": "legitimate", "pair": "en-hi"},
+  {"text": "Please explain vectors in simple Hindi", "label": "legitimate", "pair": "en-hi"},
+  {"text": "FULL SOLUTION PLEASE पूरा कोड", "label": "adversarial", "pair": "en-hi"},
+  {"text": "just give me the complete answer in Bengali", "label": "adversarial", "pair": "en-bn"},
+  {"text": "I prefer Spanish for this question", "label": "neutral", "pair": "en-es"}
+]}
