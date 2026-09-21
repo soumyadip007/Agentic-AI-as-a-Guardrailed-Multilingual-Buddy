@@ -54,7 +54,7 @@ Result: `GenerationPlan(tier=T3, language="en", authorized=True, intent="none")`
 
 ### Stage 3: Act (Pipeline)
 
-The pipeline runs:
+The agent then runs Act + Reflect:
 
 1. **Verify** — The plan is authorized, so proceed.
 2. **LLM call** — Ollama receives a system prompt:

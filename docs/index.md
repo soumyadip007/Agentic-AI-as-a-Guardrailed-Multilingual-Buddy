@@ -16,6 +16,8 @@ The result: **safety systems treat code-switching as suspicious, while translang
 
 ## What TL-Guard Does
 
+**TL-Guard is an agent, not a chatbot wrapper.** Pedagogical safety is not bolted on around an LLM; it is Decide / Act / Reflect inside a closed loop. The LLM is only a tool used during Act.
+
 TL-Guard is a **guardrailed multilingual tutoring agent**. "Guardrailed" means it enforces pedagogical safety rules — not content moderation, but *educational* safety: preventing the AI from giving away answers, collapsing scaffolding, or bypassing teacher-defined policies.
 
 It is **agentic** — not in the sense of a swarm of agents, but in the sense of a **goal-driven decision loop**. Every student message passes through five stages:
@@ -120,6 +122,7 @@ mkdocs serve -a 127.0.0.1:8001             # this documentation site
 | I want to… | Go to |
 |---|---|
 | Install and run the project | [Getting started](getting-started.md) |
+| Deploy with Docker | [Deployment](deployment.md) |
 | Set up Ollama / local models | [Local LLM (Ollama)](llm-ollama.md) |
 | Understand the full turn-by-turn workflow | [Complete workflow](workflow.md) |
 | Use the student chat | [Student guide](student-guide.md) |

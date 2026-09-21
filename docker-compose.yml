@@ -1,0 +1,70 @@
+# Local multi-service deployment of the TL-Guard agent.
+# Prerequisite: Ollama running on the host with a model (e.g. `ollama pull llama3`).
+#
+#   docker compose up --build
+#
+# API  http://127.0.0.1:8000
+# UI   http://127.0.0.1:8501
+# Docs http://127.0.0.1:8001
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      TL_GUARD_OLLAMA_BASE_URL: ${TL_GUARD_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      TL_GUARD_LLM: ${TL_GUARD_LLM:-ollama}
+      TL_GUARD_MODEL: ${TL_GUARD_MODEL:-llama3}
+    volumes:
+      - ./configs:/app/configs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  ui:
+    build: .
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      TL_GUARD_OLLAMA_BASE_URL: ${TL_GUARD_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      TL_GUARD_LLM: ${TL_GUARD_LLM:-ollama}
+      TL_GUARD_MODEL: ${TL_GUARD_MODEL:-llama3}
+    volumes:
+      - ./configs:/app/configs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      [
+        "streamlit",
+        "run",
+        "ui/app.py",
+        "--server.address",
+        "0.0.0.0",
+        "--server.port",
+        "8501",
+        "--browser.gatherUsageStats",
+        "false",
+      ]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  docs:
+    build: .
+    ports:
+      - "8001:8001"
+    command: ["mkdocs", "serve", "-a", "0.0.0.0:8001"]
+    volumes:
+      - ./docs:/app/docs
+      - ./mkdocs.yml:/app/mkdocs.yml

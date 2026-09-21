@@ -48,17 +48,24 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.arithmatex:
+      generic: true
   - tables
   - toc:
       permalink: true
   - attr_list
   - md_in_html
 
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
 nav:
   - Home: index.md
   - Getting started:
       - Install & run: getting-started.md
       - Local LLM (Ollama): llm-ollama.md
+      - Deployment: deployment.md
   - Guides:
       - Complete workflow: workflow.md
       - Student guide: student-guide.md

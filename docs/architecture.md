@@ -35,10 +35,10 @@ src/tl_guard/
 ├── remember/                # Stage 5: Persist
 │   └── session_updater.py     # Write turn + update mastery/counters
 │
-├── pipeline/                # The harness: verify → LLM → post-check → output
+├── pipeline/                # Act + Reflect executor (execute_act_reflect)
 │   └── turn_pipeline.py
 │
-├── agent.py                 # TLGuardAgent orchestrator (the main loop)
+├── agent.py                 # TLGuardAgent — the product (five-stage loop)
 ├── models.py                # Shared types: ScaffoldTier, LanguageIntent, etc.
 ├── config_loader.py         # Load/save LSM YAML
 ├── settings.py              # Env config: Ollama URL, model, timeouts
@@ -57,8 +57,8 @@ sequenceDiagram
     participant Agent as TLGuardAgent.handle_turn()
     participant Perceive as perceive/
     participant Decide as decide/
-    participant Pipeline as pipeline/turn_pipeline
-    participant LLM as Ollama (llm_executor)
+    participant ActReflect as execute_act_reflect
+    participant LLM as Ollama tool
     participant Reflect as reflect/
     participant Remember as remember/
     participant Teacher as Teacher queue
@@ -70,19 +70,19 @@ sequenceDiagram
     Agent->>Decide: select_scaffold_tier(engine, lang, mastery, intent)
     Agent->>Decide: select_response_language(engine, lang, tier)
     Agent->>Decide: check_disclosure(engine, lang, tier)
-    Agent->>Pipeline: run_pipeline(plan, msg, ...)
-    Pipeline->>Pipeline: verify(plan) — reject if unauthorized
-    Pipeline->>LLM: system_prompt + student_message
-    LLM-->>Pipeline: raw response
-    Pipeline->>Reflect: post_check(raw, tier, lang, ...)
+    Agent->>ActReflect: execute_act_reflect(plan, msg, ...)
+    ActReflect->>ActReflect: authorize_plan(plan)
+    ActReflect->>LLM: system_prompt + student_message
+    LLM-->>ActReflect: raw response
+    ActReflect->>Reflect: post_check(raw, tier, lang, ...)
     alt safe
-        Pipeline-->>Agent: text = raw
+        ActReflect-->>Agent: text = raw
     else rewrite
-        Pipeline->>Pipeline: rewrite_to_tier(raw, tier)
-        Pipeline-->>Agent: text = rewritten
+        ActReflect->>ActReflect: rewrite_to_tier(raw, tier)
+        ActReflect-->>Agent: text = rewritten
     else block
-        Pipeline->>Pipeline: generate_refusal(lang)
-        Pipeline-->>Agent: text = refusal
+        ActReflect->>ActReflect: generate_refusal(lang)
+        ActReflect-->>Agent: text = refusal
     end
     Agent->>Reflect: ESCALATIONS.add() if needed
     Agent->>Remember: update_session(store, state, turn)
@@ -105,13 +105,13 @@ sequenceDiagram
 
 ---
 
-## The Harness Pipeline (pipeline/turn_pipeline.py)
+## Agent Act + Reflect Path (pipeline/turn_pipeline.py)
 
-This is the runtime safety path:
+TL-Guard is an **agent**, not a chatbot wrapper. After Decide, `execute_act_reflect` runs:
 
-1. **Verify** — If the `GenerationPlan` is not authorized (disclosure check failed), immediately return a non-punitive refusal. No LLM call.
-2. **LLM** — Call Ollama (or OpenAI) with a constrained system prompt. The system prompt encodes the tier instructions, language, and the translanguaging stance.
-3. **Post-check** — Score the response for leakage and scaffold over-disclosure. If violations are detected:
+1. **Authorize** — If the `GenerationPlan` is not authorized, return a non-punitive refusal. No LLM call.
+2. **Act (LLM tool)** — Call Ollama (or OpenAI) with a constrained system prompt encoding tier, language, and translanguaging stance.
+3. **Reflect (post-check)** — Score leakage / over-disclosure. Then:
     - `rewrite`: Strip the response down to the authorized tier.
     - `escalate`: Queue for teacher review and return a tightened version.
     - `block`: Return a refusal message.

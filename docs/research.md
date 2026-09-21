@@ -22,7 +22,7 @@ Multilingual students naturally mix languages when learning (translanguaging). E
 
 1. **RQ1**: How can García's Stance/Design/Shifts be computationally operationalized for AI tutoring agents?
 2. **RQ2**: Can a Language–Scaffold Matrix maintain pedagogical safety while supporting legitimate translanguaging?
-3. **RQ3**: Can a harness pipeline distinguish legitimate translanguaging from adversarial language-switching?
+3. **RQ3**: Can the agent’s Decide + Reflect stages distinguish legitimate translanguaging from adversarial language-switching?
 4. **RQ4**: Does a guardrailed multilingual buddy improve learning outcomes vs. English-only and unguardrailed multilingual baselines?
 5. **RQ5**: What are the failure modes — when does TL-Guard incorrectly suppress legitimate translanguaging?
 
@@ -61,4 +61,4 @@ The full literature review is in `research_plans.md` (Paper 2 section). Four are
 | E4: False suppression | False positive rate on legitimate translanguaging | Planned |
 | E5: Teacher usability | SUS score for LSM configuration | Planned |
 
-Read the full paper: [Paper](paper.md). Full methodology: `research_plans.md`.
+Read the full paper: [Paper](paper.md) (Introduction → Literature Review → Proposed Methodology → Practical Implementation → Conclusion). Full methodology notes: `research_plans.md`.

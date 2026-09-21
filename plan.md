@@ -5,7 +5,7 @@
 **Created:** September 2026
 **Last Updated:** September 21, 2026
 **Status:** MVP implemented (independent agent + API + UI; research evaluation phases still open)
-**Project stance:** Independent codebase — TL-Guard is **not** an EduHarness extension. It builds its own harness pipeline and UI from scratch. Shared research ideas (pedagogical harnessing, disclosure control) may inform design, but there is no code, package, or runtime dependency on EduHarness.
+**Project stance:** Independent codebase — TL-Guard is a **first-class agentic tutoring system**, not an EduHarness extension and not a harness wrapping a chatbot. Shared research ideas (disclosure control, pedagogical safety) may inform design, but there is no code, package, or runtime dependency on EduHarness.
 
 ---
 
@@ -15,7 +15,7 @@ TL-Guard is an agentic AI tutoring architecture that supports multilingual learn
 
 **Core tension this resolves:** Safety systems treat code-switching as suspicious. Translanguaging pedagogy treats it as essential. TL-Guard resolves this by being *language-tolerant but pedagogically strict*.
 
-**Product surface:** A self-contained tutoring product with (1) a backend agent/harness, (2) a student chat UI for multilingual tutoring, and (3) a teacher UI for LSM configuration and escalation review.
+**Product surface:** A self-contained tutoring product with (1) the TL-Guard agent (Perceive→Decide→Act→Reflect→Remember), (2) a student chat UI for multilingual tutoring, and (3) a teacher UI for LSM configuration and escalation review.
 ---
 
 ## 2. Research Objectives
@@ -314,7 +314,7 @@ This is **in scope** for the project (demo, usability study E5, and paper artifa
 | Component | Technology | Justification |
 |-----------|-----------|---------------|
 | Language | Python 3.11+ | Ecosystem support for NLP/ML |
-| Agent / harness | **Custom TL-Guard pipeline** (verify → LLM → post-check → output) | Independent project — no EduHarness dependency |
+| Agent | **TLGuardAgent** (Perceive → Decide → Act → Reflect → Remember) | Independent project — no EduHarness dependency |
 | API | FastAPI | Serves agent to UI and experiments |
 | Student + Teacher UI | Streamlit (MVP) **or** Next.js + React | Research demo vs. polished SUS study |
 | LLM inference (cloud) | OpenAI API (GPT-4o) | State-of-the-art multilingual capability |
@@ -334,7 +334,7 @@ This is **in scope** for the project (demo, usability study E5, and paper artifa
 ```
 tl-guard/                         # Independent repo (this project)
 ├── src/
-│   ├── pipeline/                 # Own harness: verify → LLM → post-check → output
+│   ├── pipeline/                 # Act + Reflect executor (execute_act_reflect)
 │   │   ├── verify.py
 │   │   ├── executor.py
 │   │   ├── post_check.py
@@ -467,7 +467,7 @@ M7 ─────────────────────────�
 
 | Dependency | Status | Action Needed |
 |------------|--------|---------------|
-| EduHarness | **Not used** | Independent project — build own `verify → LLM → post-check → output` pipeline |
+| EduHarness | **Not used** | Independent agentic system — LLM is a tool inside Act |
 | OpenAI API access (GPT-4o) | Required | API key with sufficient quota for ~3,000+ sessions |
 | GPU for local LLM inference | Required | LLaMA 3.1 8B and Qwen 2.5 7B need ≥24 GB VRAM (A100/4090) |
 | fastText language ID model | Available | Download lid.176.bin |
@@ -484,7 +484,7 @@ M7 ─────────────────────────�
 The project is complete when:
 
 1. TL-Guard agent loop runs end-to-end across all 3 language pairs **as an independent system** (no EduHarness dependency)
-2. Own harness pipeline (`verify → LLM → post-check → output`) is the sole runtime path
+2. Agent Act + Reflect (`authorize → LLM tool → post-check`) is the sole generation path
 3. LSM policy engine correctly enforces >95% of tier-language combinations
 4. Intent classifier achieves >0.80 macro-F1 on the evaluation set
 5. Comparative evaluation (E3) shows measurable improvement over at least 2 of 3 baselines on at least 2 metrics

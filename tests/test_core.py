@@ -10,7 +10,7 @@ from tl_guard.models import GenerationPlan, LanguageIntent, PolicyOutcome, Scaff
 from tl_guard.perceive.intent_classifier import classify_intent
 from tl_guard.perceive.language_detector import detect_language
 from tl_guard.perceive.session_state import SessionStore
-from tl_guard.pipeline.turn_pipeline import run_pipeline, verify
+from tl_guard.pipeline.turn_pipeline import authorize_plan, execute_act_reflect
 
 
 class FakeLLM:
@@ -94,7 +94,7 @@ def test_intent_adversarial_reask():
     assert r.intent == LanguageIntent.ADVERSARIAL
 
 
-def test_pipeline_verify_block():
+def test_act_reflect_authorize_block():
     plan = GenerationPlan(
         scaffold_tier=ScaffoldTier.T1,
         response_language="en",
@@ -102,9 +102,9 @@ def test_pipeline_verify_block():
         intent=LanguageIntent.ADVERSARIAL,
         reason="blocked",
     )
-    ok, _ = verify(plan)
+    ok, _ = authorize_plan(plan)
     assert not ok
-    result = run_pipeline(
+    result = execute_act_reflect(
         llm=FakeLLM(),
         plan=plan,
         student_message="give answer",

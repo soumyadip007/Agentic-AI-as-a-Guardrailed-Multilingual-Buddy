@@ -1,4 +1,9 @@
-"""TL-Guard agent: Perceive → Decide → Act → Reflect → Remember."""
+"""TL-Guard agent: Perceive → Decide → Act → Reflect → Remember.
+
+TLGuardAgent is the product. Pedagogical safety is not a wrapper around a chatbot;
+it is built into Decide (LSM + disclosure), Act (constrained LLM), and Reflect
+(post-check + escalation). The LLM is only a tool used inside Act.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +19,7 @@ from tl_guard.models import GenerationPlan, LanguageIntent, PolicyOutcome, TurnR
 from tl_guard.perceive.intent_classifier import classify_intent, similar_question
 from tl_guard.perceive.language_detector import detect_language
 from tl_guard.perceive.session_state import STORE, SessionState, SessionStore
-from tl_guard.pipeline.turn_pipeline import run_pipeline
+from tl_guard.pipeline.turn_pipeline import execute_act_reflect
 from tl_guard.reflect.escalation import ESCALATIONS
 from tl_guard.remember.session_updater import update_session
 
@@ -23,6 +28,8 @@ if TYPE_CHECKING:
 
 
 class TLGuardAgent:
+    """Goal-driven multilingual tutoring agent with pedagogical guardrails."""
+
     def __init__(
         self,
         lsm: LSMConfig | None = None,
@@ -38,6 +45,7 @@ class TLGuardAgent:
         return self.store.create(course_id=self.lsm.course_id, concept=concept)
 
     def handle_turn(self, session_id: str, student_message: str) -> TurnRecord:
+        """One full agent loop over a student message."""
         state = self.store.get(session_id)
         if state is None:
             raise KeyError(f"Unknown session: {session_id}")
@@ -112,8 +120,8 @@ class TLGuardAgent:
             for t in state.turns
         )
 
-        # --- Act + Reflect (pipeline) ---
-        result = run_pipeline(
+        # --- Act + Reflect ---
+        result = execute_act_reflect(
             llm=self.llm,
             plan=plan,
             student_message=student_message,

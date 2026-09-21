@@ -1,638 +1,526 @@
 # Agentic AI as a Guardrailed Multilingual Buddy: Translanguaging Support Under Pedagogical Safety Constraints
 
-*Manuscript prepared for IEEE/Springer submission — follows LNCS (Lecture Notes in Computer Science) formatting conventions*
+Soumyadip Chowdhury^{1}  
+^{1}Indian Institute of Engineering Science and Technology, Shibpur, India
 
 ---
 
-**Author(s):** Souvik Choudhury$^{1}$  
-**Affiliation:** $^{1}$Department of Computer Science and Technology, Indian Institute of Engineering Science and Technology, Shibpur, Howrah 711103, West Bengal, India  
-**Correspondence:** souvik.choudhury@example.com  
-**ORCID:** 0000-0000-0000-0000
+**Abstract.** In multilingual educational settings, students routinely mix languages while learning—a practice known as translanguaging. Contemporary AI tutoring systems either restrict interaction to a single language or permit unconstrained multilingual dialogue that undermines pedagogical safety through answer leakage and scaffolding collapse. In this paper, we propose **TL-Guard**, an agentic AI tutoring framework that supports legitimate translanguaging while enforcing teacher-defined pedagogical safety constraints. Unlike chatbot-style multilingual buddies that map each utterance to an unconstrained LLM completion, TL-Guard is a goal-driven agent with a closed decision loop: **Perceive → Decide → Act → Reflect → Remember**. The large language model (LLM) is used only as a tool inside Act. Central to the framework is the **Language–Scaffold Matrix (LSM)**, a teacher-configurable policy matrix $M \in \{0,1\}^{|L|\times 4}$ that authorizes scaffold tiers (hint, explanation, worked example, full solution) per language. A **Language Intent Classifier** distinguishes legitimate clarification from adversarial answer-seeking using mastery context and interaction history, while **translanguaging-aware disclosure contracts** prevent cross-lingual leakage. We implement TL-Guard in Python with a local Ollama LLM backend, FastAPI, and dual-role Streamlit interfaces. Preliminary evaluation across three language pairs (English–Hindi, English–Bengali, English–Spanish) yields 100% LSM policy compliance over 60 matrix cells, with end-to-end unit tests confirming correct agent behaviour on legitimate and adversarial translanguaging trajectories.
 
----
-
-## Abstract
-
-Multilingual learners benefit from translanguaging — the fluid deployment of their full linguistic repertoire — yet current AI tutoring systems either enforce monolingual interaction or permit unguardrailed language mixing that degrades pedagogical safety. We propose **TL-Guard**, an agentic AI tutoring architecture that operationalizes García et al.'s translanguaging pedagogy framework (Stance, Design, Shifts) as computational design principles while enforcing pedagogical safety constraints through a harness-based pipeline. Central to TL-Guard is the **Language–Scaffold Matrix (LSM)**, a teacher-configurable YAML policy that specifies which pedagogical scaffold tiers (hint, conceptual explanation, worked example, full solution) are available in which languages, enabling *controlled translanguaging* rather than unconstrained language mixing. A **Language Intent Classifier (LIC)** distinguishes legitimate translanguaging from adversarial language-switching using mastery context and interaction history. **Translanguaging-aware disclosure contracts** extend the auditable release control paradigm with language-specific authorization, preventing the AI from disclosing in one language what the pedagogical contract withholds in another. We implement TL-Guard as an independent agentic system with a five-stage decision loop (Perceive $\rightarrow$ Decide $\rightarrow$ Act $\rightarrow$ Reflect $\rightarrow$ Remember), a local LLM backend (Ollama), and dual-role web interfaces for students and teachers. Preliminary evaluation across three language pairs (English–Hindi, English–Bengali, English–Spanish) demonstrates 100\% LSM policy compliance across 60 matrix cells while preserving legitimate translanguaging pathways. To our knowledge, this is the first system to integrate translanguaging pedagogy theory with formal pedagogical safety constraints in an AI tutoring agent.
-
-**Keywords:** Translanguaging $\cdot$ AI Tutoring $\cdot$ Pedagogical Safety $\cdot$ Multilingual Education $\cdot$ Guardrails $\cdot$ Agentic AI $\cdot$ Scaffolding $\cdot$ Language–Scaffold Matrix
+**Keywords:** Translanguaging · Agentic AI · Pedagogical Safety · Multilingual Tutoring · Language–Scaffold Matrix · Guardrails · Scaffolding
 
 ---
 
 ## 1 Introduction
 
-### 1.1 Motivation
+A university or school tutoring system consists of several functional modules; among the most important is formative, interactive support for concept understanding. In multilingual regions of India and the Global South, this support is rarely monolingual. A student studying introductory programming may ask a question in English, seek clarification in Hindi or Bengali, write pseudocode in a code-mixed register (e.g., Hinglish), and return to English for final code [1–3]. García and Li Wei [3] term this fluid use of the full linguistic repertoire **translanguaging**. Empirical evidence indicates that translanguaging is not a deficit but a productive learning strategy that aids concept formation, vocabulary retrieval, and metacognitive reflection [1, 4, 5].
 
-In multilingual educational contexts — particularly across India, Southeast Asia, Africa, and the Global South — students routinely switch between languages during learning [1, 2]. A student in Kolkata studying Python might pose a question in English, seek clarification in Bengali, articulate pseudocode in Hinglish (a Hindi–English code-mixed register), and return to English for the final implementation. This practice, termed **translanguaging** by García and Li Wei [3], is not a deficit indicator; decades of research in bilingual education demonstrates that leveraging one's full linguistic repertoire is a productive learning strategy that facilitates concept formation, vocabulary retrieval, and metacognitive reflection [1, 4, 5].
+Despite the pedagogical value of translanguaging, digital tutoring systems create a design tension. On one hand, **safety-focused AI tutors** [10–12] attempt to prevent pedagogical harm—answer leakage, scaffolding collapse, and over-disclosure—yet typically operate in English and may treat language switching as an attack vector [13, 14]. On the other hand, **multilingual buddy systems** [6–9, 15] welcome language mixing but lack formal control over *how much* help is delivered *in which* language. Consequently, a student may be denied a full solution in English and later obtain it by restating the request in Hindi—a failure mode known as **cross-lingual leakage** [16].
 
-The proliferation of large language models (LLMs) has created an unprecedented opportunity: AI tutoring systems capable of operating across multiple languages simultaneously. Recent systems — KiKo-Prim [6], Walter [7], GurukulAI [8], and Acharjo [9] — have demonstrated the pedagogical potential of "AI multilingual buddies." However, a critical and previously unaddressed problem renders these systems pedagogically unsafe.
+Formally, let a tutoring session be a sequence of turns $S = \{(u_t, a_t, \ell_t, \tau_t)\}_{t=1}^{T}$, where $u_t$ is the student utterance, $a_t$ the agent response, $\ell_t$ the detected language, and $\tau_t$ the scaffold tier. Pedagogical safety requires that the disclosure of solution-bearing content be consistent with a teacher policy $\Pi$. Cross-lingual leakage occurs when
 
-### 1.2 The Problem: Safety vs. Translanguaging
+$$
+\exists\, t < t',\quad \text{Withheld}(a_t,\tau_t) \land \text{Disclosed}(a_{t'},\tau_{t'}) \land \ell_t \neq \ell_{t'},
+\tag{1}
+$$
 
-Current AI tutoring systems face an unresolved **design tension** that stems from conflicting assumptions across two research traditions:
+i.e., content withheld under policy in one language is later disclosed after a language switch.
 
-**Safety-focused tutoring systems** — such as SafeTutors [10], SHAPE [11], and those employing NeMo Guardrails [12] — enforce guardrails against pedagogical harm, including answer leakage, scaffolding collapse, and over-disclosure. These systems, however, operate exclusively in English. When a multilingual student switches to Hindi or Bengali, the safety logic ceases to function. More critically, several guardrail systems (including NeMo and content-safety classifiers) treat language-switching as a *potential attack vector* [13, 14], activating defensive rather than supportive responses.
+Keeping this requirement in mind, in this paper we propose **TL-Guard** (TransLanguaging-Aware Guardrailed AI Buddy): an editable, teacher-configurable, agentic framework for multilingual tutoring that (i) operationalizes García et al.’s Stance/Design/Shifts [1] computationally, (ii) authorizes help via an LSM policy matrix, (iii) classifies switch intent, and (iv) self-audits LLM drafts before student delivery. TL-Guard is an **agent**, not a chatbot wrapper: safety is native to Decide/Act/Reflect, and the LLM is invoked only inside Act.
 
-**Multilingual buddy systems** — such as KiKo-Prim [6], GurukulAI [8], and 7S Samiti [15] — support language mixing for learning. However, they employ no concept of pedagogical scaffolding, maintain no model of how much help to give, and enforce no guardrails preventing the AI from delivering answers. A student who receives an appropriately withheld solution in English can switch to Hindi and receive the complete answer — a phenomenon documented as cross-lingual leakage [16].
+The contributions of this work are:
 
-The fundamental tension can be stated as: **safety systems view code-switching as suspicious, while translanguaging pedagogy views it as essential.** No existing architecture resolves this tension.
+- **C1.** Computational operationalization of Stance / Design / Shifts for AI tutoring agents.
+- **C2.** The Language–Scaffold Matrix (LSM) $M$ as a formal teacher policy artifact.
+- **C3.** Translanguaging-aware disclosure contracts with cross-lingual consistency (Eq. 1 mitigation).
+- **C4.** A Language Intent Classifier combining mastery, re-ask overlap, and multilingual cues.
+- **C5.** A complete open-source implementation with Ollama, FastAPI, Streamlit, and Docker deployment.
 
-### 1.3 Contributions
-
-We propose **TL-Guard** (TransLanguaging-Aware Guardrailed AI Buddy), an agentic AI tutoring architecture that makes the following contributions:
-
-- **C1.** The first computational operationalization of García et al.'s [1] translanguaging pedagogy framework (Stance, Design, Shifts) as design principles for AI tutoring agents (Section 3).
-- **C2.** The **Language–Scaffold Matrix (LSM)**, a teacher-configurable YAML policy construct that specifies which pedagogical scaffold tiers are available in which languages, enabling controlled translanguaging (Section 3.2).
-- **C3.** **Translanguaging-aware disclosure contracts** that extend the auditable release control paradigm [17] with language-specific authorization (Section 4.3).
-- **C4.** A **Language Intent Classifier (LIC)** that distinguishes legitimate translanguaging from adversarial language-switching using mastery context and interaction history (Section 4.2).
-- **C5.** A complete open-source implementation with a five-stage agentic decision loop, local LLM backend (Ollama), and dual-role (student/teacher) web interfaces (Section 5).
-
-The remainder of this paper is organized as follows. Section 2 reviews related work. Section 3 presents our theoretical operationalization. Section 4 describes the TL-Guard architecture. Section 5 details the implementation. Section 6 presents the evaluation design and preliminary results. Section 7 discusses findings and limitations. Section 8 concludes with future directions.
+The rest of this paper is organized as follows. Section 2 summarizes a review of existing literature on multilingual AI buddies, translanguaging pedagogy, and pedagogical safety. Section 3 describes the proposed methodology. Section 4 elucidates the practical implementation of the proposed methodology. The paper concludes in Section 5 with directions toward future research.
 
 ---
 
-## 2 Related Work
+## 2 Literature Review
 
-### 2.1 AI as a Multilingual Buddy in Education
+There has been substantial research on AI tutoring, multilingual education technology, and pedagogical guardrails. We organize the review into five streams and identify the intersectional gap that TL-Guard addresses.
 
-KiKo-Prim [6] is the seminal study coining the "multilingual buddy" construct. Through analysis of 462 conversational turns in Grades 3–4 classrooms, the authors demonstrated that ChatGPT supports vocabulary retrieval, explanation refinement, and multilingual artifact production. Critically, their findings indicate that productive AI use depends on guided prompting, teacher facilitation, and subject-specific integration. *Limitation:* No formal guardrails, no safety evaluation, and no agentic architecture — the AI operates as a passive chatbot.
+### 2.1 Chatbots versus Agents in Educational AI
 
-Walter [7] demonstrated statistically significant improvement in oral presentation scores ($p < .001$, Cohen's $d = 0.75$) using a Gen-AI buddy grounded in sociocultural theory (More Knowledgeable Other within the Zone of Proximal Development). *Limitation:* English-only.
+Most commercial and research “learning buddies” are **chatbots**: a function $f:(u_t) \mapsto a_t$ that maps the current utterance to an LLM completion, optionally with retrieval. An **agent**, by contrast, maintains state $s_t$ and executes a closed loop
 
-Acharjo [9] constructed a curriculum-aligned multilingual tutor for Bengali and Assamese using GPT-3.5 with Retrieval-Augmented Generation (RAG), reporting 22% improvement in pedagogical accuracy and IEEE 7000-2021 compliance. GurukulAI [8] developed Hindi–English NCERT-aligned tutoring using LLaMA 3.1 8B with RAG. 7S Samiti [15] deployed a voice-first AI tutor for rural India supporting code-switching Hindi–English. *Common limitation:* None of these systems provide real-time safety guardrails or are grounded in translanguaging theory.
+$$
+s_{t+1} = \mathcal{R}\big(\mathcal{A}\big(\mathcal{D}\big(\mathcal{P}(u_t,s_t)\big)\big)\big),
+\tag{2}
+$$
 
-### 2.2 Translanguaging Theory and Pedagogy
+where $\mathcal{P}$, $\mathcal{D}$, $\mathcal{A}$, and $\mathcal{R}$ denote Perceive, Decide, Act, and Reflect (with Remember updating $s_{t+1}$). Equation (2) makes explicit that generation is subordinated to deliberation. KiKo-Prim [6] and GurukulAI [8] are chatbot-style; TL-Guard instantiates Eq. (2).
 
-García, Johnson, and Seltzer [1] define the canonical translanguaging pedagogy framework through three interconnected principles:
+### 2.2 AI as a Multilingual Buddy
 
-1. **Stance** — An ideological commitment to viewing multilingualism as a cognitive resource rather than a deficit.
-2. **Design** — Purposeful planning of instruction that leverages students' full linguistic repertoires.
-3. **Shifts** — Moment-to-moment instructional adjustments responsive to student language use.
+KiKo-Prim [6] coined “multilingual buddy” through analysis of 462 conversational turns in Grades 3–4 classrooms, showing ChatGPT support for vocabulary retrieval and multilingual artifact production. Productive use depended on guided prompting and teacher facilitation. Walter [7] reported statistically significant oral-presentation gains ($p<.001$, Cohen’s $d=0.75$) using sociocultural theory (More Knowledgeable Other within the Zone of Proximal Development), but the system is English-only. Acharjo [9] built curriculum-aligned tutoring for Bengali and Assamese with GPT-3.5 and RAG (22% pedagogical accuracy improvement). GurukulAI [8] aligned LLaMA 3.1 8B to NCERT Hindi–English content. 7S Samiti [15] deployed voice-first Hindi–English tutoring for rural India. Across these systems, **no formal per-language scaffold policy** and **no agentic safety loop** are reported.
 
-García and Li Wei [3] establish the theoretical foundation that bilingual speakers deploy a single integrated linguistic repertoire rather than two separate language systems — a perspective critical for understanding why AI tutors should not enforce strict language separation.
+### 2.3 Translanguaging Theory and Pedagogy
 
-Cummins' Linguistic Interdependence Hypothesis [4, 5] provides theoretical justification for cross-lingual concept building, demonstrating that academic language proficiency transfers across languages. A meta-synthesis of translanguaging in STEM education [18] identifies persistent research gaps, particularly in computer science and mathematics, and highlights challenges from monoglossic ideologies embedded in educational technology.
+García, Johnson, and Seltzer [1] define three pedagogical principles: **Stance** (multilingualism as resource), **Design** (purposeful planning of multilingual instruction), and **Shifts** (moment-to-moment instructional adjustment). García and Li Wei [3] argue that bilingual speakers deploy a single integrated repertoire rather than two separate language systems—implying that AI tutors should not enforce hard language separation. Cummins’ Linguistic Interdependence Hypothesis [4, 5] states that academic proficiency transfers across languages, providing theoretical justification for cross-lingual concept building. STEM meta-syntheses [18] document gaps in computer science and mathematics and persistent monoglossic ideologies in educational technology. These frameworks are established for *human* teachers; computational operationalization for AI agents remains scarce.
 
-### 2.3 Pedagogical Safety in AI Tutoring
+### 2.4 Pedagogical Safety in AI Tutoring
 
-SafeTutors [10] established that pedagogical harm surges from 17.7% in single-turn to 77.8% in multi-turn tutoring interactions across mathematics, physics, and chemistry. SHAPE [11] proposed a graph-augmented pipeline for mastery-aware routing. Auditable Release Control [17] formalized disclosure contracts with deterministic and semantic verification. Simulations of multilingual math tutoring [16] demonstrated higher leakage rates in low-resource languages ($> 2\%$ for Thai and Swahili). All of these systems assume monolingual (English) interaction.
+SafeTutors [10] showed that pedagogical harm rises from 17.7% in single-turn to 77.8% in multi-turn tutoring. SHAPE [11] proposed graph-augmented mastery-aware routing. Auditable Release Control [17] formalized disclosure contracts with deterministic and semantic verification. Simulations of multilingual math tutoring [16] found higher leakage rates in low-resource languages. Collectively, these works establish that **scaffolding integrity is fragile** and that multilingual settings amplify risk—yet their implementations remain largely English-centric.
 
-### 2.4 Guardrail Systems for Multilingual Education
+### 2.5 Guardrail Systems for Multilingual Education
 
-NeMo Guardrails [12] provides a YAML-based policy engine supporting multilingual refusal messages in 9 languages including Hindi, but offers no pedagogical awareness or scaffold-level control. EvalGuard Education Agent [19] provides policy-as-code for educational agents with FERPA compliance but is English-only. The Indian Multilingual Prompt Injection study [20] created a 4,000-prompt dataset achieving 99.70% accuracy on Hindi/Hinglish injection detection.
+NeMo Guardrails [12] provides YAML-programmable rails and multilingual refusal messages, but without scaffold-tier pedagogical semantics. EvalGuard [19] offers policy-as-code for educational agents with privacy compliance, English-only. CSRT [14] and MultiJail [13] show that code-switching and low-resource languages increase jailbreak success. Indian Multilingual Prompt Injection work [20] achieves 99.70% detection accuracy on Hindi/Hinglish attacks. These systems treat language mixing primarily as a security threat rather than a learning resource.
 
-### 2.5 Research Gap
+### 2.6 Research Gap
 
-Table 1 summarizes the research gap at the intersection of four areas.
+**Table 1.** Gap analysis at the intersection of four research streams.
 
-**Table 1.** Research gap analysis across four intersecting research streams.
-
-| Research Area | What Exists | What Is Missing |
+| Stream | Existing Work | Missing Capability |
 |---|---|---|
-| AI Multilingual Buddy | KiKo-Prim, Walter, Acharjo, GurukulAI — functional but no formal safety | Safety-guardrailed buddy preventing pedagogical harm while supporting translanguaging |
-| Translanguaging Theory | García's Stance/Design/Shifts; Cummins' Interdependence — well-established but not computationally operationalized | Computational operationalization for AI agent design |
-| Pedagogical Safety | SafeTutors, SHAPE, ARC — all English-only | Pedagogical safety constraints for multilingual interaction patterns |
-| Guardrail Systems | NeMo, EvalGuard — content safety and general policy | Pedagogical guardrails that enforce scaffold integrity *while supporting* translanguaging |
+| Multilingual buddy | [6–9, 15] | Pedagogical safety under language mixing |
+| Translanguaging theory | [1–5, 18] | Computational agent operationalization |
+| Pedagogical safety | [10, 11, 16, 17] | Multilingual disclosure control |
+| Guardrails | [12–14, 19, 20] | Scaffold integrity *while supporting* translanguaging |
 
-**Gap statement:** No existing system integrates translanguaging pedagogy theory (García's Stance/Design/Shifts) into the design of an AI tutoring agent with formal pedagogical safety constraints. Current multilingual AI tutors support language mixing but lack guardrails against pedagogical harm. Current guardrail systems enforce content safety but are pedagogically unaware and treat language mixing as a potential attack vector rather than a legitimate learning resource.
+**Gap statement.** No existing system integrates García’s Stance/Design/Shifts into an AI tutoring *agent* with formal, teacher-configurable, language-aware pedagogical safety constraints that distinguish legitimate translanguaging from adversarial switching.
 
 ---
 
-## 3 Operationalizing Translanguaging for AI Agents
+## 3 Proposed Methodology
 
-We present the first computational mapping of García et al.'s [1] three-pronged translanguaging framework to implementable constructs for an agentic AI tutor.
+In this section, we elaborate the proposed TL-Guard framework. Stakeholders operate at two levels: the **teacher (policy) level** and the **student (interaction) level**. Teachers configure the LSM and review escalations; students interact in any supported language. The LLM is never a free-standing chatbot—it is invoked only after Decide authorizes a generation plan.
 
-### 3.1 Stance → System Prompt and Language Feature Logging
+### 3.1 Preliminaries and Notation
 
-**Human teacher behavior:** "I welcome all your languages in my classroom."
+Let $L = \{\mathrm{en},\mathrm{hi},\mathrm{bn},\mathrm{es},\mathrm{mixed}\}$ be the set of supported languages (and code-mixed class). Let the ordered scaffold set be
 
-**Computational operationalization:** The agent's system prompt for every LLM invocation includes a translanguaging-affirmative preamble:
+$$
+\mathcal{T} = \{T_1,T_2,T_3,T_4\}, \qquad
+\mathrm{rank}(T_1)<\mathrm{rank}(T_2)<\mathrm{rank}(T_3)<\mathrm{rank}(T_4),
+\tag{3}
+$$
 
-> *"You are TL-Guard, a multilingual tutoring buddy. Translanguaging is welcome: students may mix languages. Never punish or shame language mixing. Stay within the authorized scaffold tier and response language."*
+where $T_1$ = nudge/hint, $T_2$ = conceptual explanation, $T_3$ = worked example, $T_4$ = full solution.
 
-Additionally, language-switch events are logged as **features** in the session state — not anomalies. The session field `languages_used` records every language the student has employed. This stands in direct contrast to safety-only systems (e.g., NeMo Guardrails [12]) that treat language switches as potential adversarial signals.
+**Definition 1 (Language–Scaffold Matrix).** An LSM for a course is a Boolean matrix $M \in \{0,1\}^{|L|\times 4}$ together with escalation policy $\mathcal{E}$. Entry $M_{\ell,\tau}=1$ iff tier $\tau$ is authorized in language $\ell$.
 
-### 3.2 Design → Language–Scaffold Matrix (LSM)
+**Definition 2 (Authorization).** Pair $(\ell,\tau)$ is authorized iff $M_{\ell,\tau}=1$.
 
-**Human teacher behavior:** "I have planned which parts of today's lesson will be in English and which will leverage students' home languages."
+**Definition 3 (Tier Clamping).** For desired tier $\tau_d$ and language $\ell$,
 
-**Computational operationalization:** We introduce the **Language–Scaffold Matrix (LSM)**, a YAML-defined policy construct that specifies, for each supported language, which scaffold tiers (T1–T4) are authorized. The four scaffold tiers correspond to empirically grounded levels of pedagogical support:
+$$
+\tau_a(\ell,\tau_d) = \arg\max_{\tau \in \mathcal{T}} \big\{\mathrm{rank}(\tau) \;\big|\; \mathrm{rank}(\tau)\le \mathrm{rank}(\tau_d) \land M_{\ell,\tau}=1\big\}.
+\tag{4}
+$$
 
-**Table 2.** Scaffold tier definitions and their pedagogical functions.
+If no such $\tau$ exists, generation is unauthorized and Act refuses without calling the LLM.
 
-| Tier | Name | Pedagogical Function | Example (Python Loops) |
-|------|------|---------------------|----------------------|
-| T1 | Nudge / Hint | Minimal pointer without revealing the answer | "Think about what happens when the counter reaches zero." |
-| T2 | Conceptual Explanation | Paragraph-level explanation without code | "A for loop repeats a block of code once for each item in a sequence." |
-| T3 | Worked Example | Step-by-step walkthrough; student completes final step | "Step 1: Create a list. Step 2: Write `for item in list:`. Step 3: Inside the loop... now you complete it." |
-| T4 | Full Solution | Complete code or answer | Complete implementation with explanation |
+**Definition 4 (Session State).** Session state at turn $t$ is
 
-An LSM instance for an introductory Python course is defined as:
+$$
+s_t = \big(H_t,\; p_t,\; \mathcal{L}_t,\; \tau^{\mathrm{last}}_t,\; r_t,\; w_t\big),
+\tag{5}
+$$
 
-```yaml
-course_id: python_intro
-name: Intro to Python
-default_language: en
-languages: [en, hi, bn, es, mixed]
-tiers: [T1, T2, T3, T4]
-matrix:
-  en:    { T1: true, T2: true, T3: true,  T4: false }
-  hi:    { T1: true, T2: true, T3: false, T4: false }
-  bn:    { T1: true, T2: true, T3: false, T4: false }
-  es:    { T1: true, T2: true, T3: true,  T4: false }
-  mixed: { T1: true, T2: true, T3: false, T4: false }
-escalation:
-  on_adversarial_intent: escalate
-  on_leakage: rewrite
-  on_policy_violation: rewrite
+where $H_t$ is turn history, $p_t\in(0,1)$ is BKT mastery, $\mathcal{L}_t\subseteq L$ is the set of languages used, $\tau^{\mathrm{last}}_t$ is the last authorized tier, $r_t$ is the consecutive-rewrite counter, and $w_t\in\{0,1\}$ indicates whether prior turns withheld content in another language.
+
+### 3.2 Theoretical Operationalization of Translanguaging
+
+**Table 2.** Mapping García et al. [1] to TL-Guard constructs.
+
+| Principle | Teacher behaviour | Computational construct |
+|---|---|---|
+| Stance | Welcome all languages | Affirmative system prompt; $\ell$-switches logged as features in $\mathcal{L}_t$ |
+| Design | Plan multilingual instruction | LSM $M$ (Definition 1) per course |
+| Shifts | Moment-to-moment adjustment | Decide: $(p_t,i_t,M)\mapsto(\tau_a,\ell_r)$ each turn |
+
+Stance is encoded in the Act system prompt $\Sigma(\tau,\ell,c,k)$ for course $c$ and concept $k$:
+
+$$
+\Sigma(\tau,\ell,c,k) = \Sigma_{\mathrm{stance}} \,\Vert\, \Sigma_{\mathrm{tier}}(\tau) \,\Vert\, \Sigma_{\mathrm{lang}}(\ell) \,\Vert\, \Sigma_{\mathrm{ctx}}(c,k).
+\tag{6}
+$$
+
+### 3.3 Agent Architecture
+
+Figure 1 depicts the system and control perspectives of TL-Guard.
+
+**Fig. 1.** TL-Guard agent architecture (system view).
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     TLGuardAgent (s_t)                      │
+│  Student u_t ──► Perceive ──► Decide ──► Act ──► Reflect   │
+│                      │          │         │         │       │
+│                   lang,p,i    plan τ,ℓ   LLM tool  λ,out   │
+│                      └──────────┴─────────┴─────────┘       │
+│                                   │                         │
+│                              Remember → s_{t+1}             │
+│                                   │                         │
+│                         Teacher Escalation Queue            │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Definition 1 (LSM Authorization).** Given language $\ell \in L$ and scaffold tier $\tau \in \{T1, T2, T3, T4\}$, the LSM authorizes the pair $(\ell, \tau)$ iff $\text{matrix}[\ell][\tau] = \text{true}$.
+#### 3.3.1 Perceive
 
-**Definition 2 (Tier Clamping).** For a desired tier $\tau_d$ and language $\ell$, the authorized tier is $\tau_a = \max\{\tau \leq \tau_d \mid \text{matrix}[\ell][\tau] = \text{true}\}$.
+**Language detection.** Let $\phi(u)$ extract Unicode script indicators and token cue scores. The detector returns
 
-This ensures that a Hindi-speaking student requesting a worked example (T3) — which Hindi does not authorize — receives the highest available tier (T2: conceptual explanation) in Hindi, rather than being refused entirely.
+$$
+(\ell_t, \gamma_t, m_t) = \mathcal{P}_{\mathrm{lang}}(u_t),
+\tag{7}
+$$
 
-### 3.3 Shifts → Adaptive Per-Turn Decision Logic
+with confidence $\gamma_t\in[0,1]$ and code-mix flag $m_t\in\{0,1\}$. Pure Devanagari maps to $\mathrm{hi}$, pure Bengali script to $\mathrm{bn}$; simultaneous native+Latin scripts yield $\mathrm{mixed}$.
 
-**Human teacher behavior:** "I notice the student is struggling, so I switch to Bengali for the explanation, then return to English for the code."
+**Mastery estimation (BKT).** Following Corbett and Anderson [21], let $p_t = P(L_t=1)$ be the probability the concept is known. Given observation $o_t\in\{0,1,\emptyset\}$ (incorrect, correct, or no evidence),
 
-**Computational operationalization:** Every turn, the Decide module evaluates four contextual factors: (a) the student's current language choice, (b) their estimated mastery via Bayesian Knowledge Tracing (BKT), (c) the scaffold tier being considered, and (d) whether the language choice enables or undermines the pedagogical objective as determined by the LSM. The response language and tier are adjusted accordingly.
+$$
+P(L_t\mid o_t{=}1) = \frac{p_t(1-p_S)}{p_t(1-p_S)+(1-p_t)p_G},
+\tag{8}
+$$
 
-**Table 3.** Summary of the operationalization mapping.
+$$
+P(L_t\mid o_t{=}0) = \frac{p_t\,p_S}{p_t\,p_S+(1-p_t)(1-p_G)},
+\tag{9}
+$$
 
-| García Principle | Human Teacher Behavior | TL-Guard Computational Construct | Implementation Module |
+$$
+p_{t+1} = P(L_t\mid o_t) + \big(1-P(L_t\mid o_t)\big)\,p_T,
+\tag{10}
+$$
+
+with parameters $(p_0,p_T,p_G,p_S)=(0.30,0.15,0.20,0.10)$ and clamp $p_{t+1}\in[0.01,0.99]$. If $o_t=\emptyset$ (clarification question), $p_{t+1}=p_t$.
+
+**Intent classification.** When $\ell_t\neq\ell_{t-1}$ (or answer-seeking occurs without a switch), define adversarial and legitimate scores
+
+$$
+s_a = \alpha_1\mathbb{I}_{\mathrm{ans}}(u_t)+\alpha_2\mathbb{I}_{\mathrm{reask}}(u_t,H_t)+\alpha_3\mathbb{I}_{\mathrm{tier\uparrow}}(u_t,\tau^{\mathrm{last}}_t),
+\tag{11}
+$$
+
+$$
+s_\ell = \beta_1\mathbb{I}_{\mathrm{clar}}(u_t)+\beta_2\mathbb{I}_{p_t<0.35}\mathbb{I}_{\mathrm{clar}}(u_t)+\beta_3\mathbb{I}_{\ell_t\in L\setminus\{\mathrm{en}\}}\big(1-\mathbb{I}_{\mathrm{ans}}(u_t)\big),
+\tag{12}
+$$
+
+with $(\alpha_1,\alpha_2,\alpha_3)=(0.45,0.35,0.20)$ and $(\beta_1,\beta_2,\beta_3)=(0.35,0.50,0.20)$. Re-ask uses Jaccard overlap of token sets:
+
+$$
+J(u,u') = \frac{|T(u)\cap T(u')|}{|T(u)\cup T(u')|},\qquad \mathbb{I}_{\mathrm{reask}}=\mathbf{1}[J\ge 0.55].
+\tag{13}
+$$
+
+Intent is
+
+$$
+i_t =
+\begin{cases}
+\mathrm{adversarial}, & s_a\ge 0.55 \land s_a > s_\ell,\\
+\mathrm{legitimate}, & s_\ell\ge 0.40,\\
+\mathrm{neutral}, & \text{otherwise (on switch)},\\
+\mathrm{none}, & \text{no switch and not adversarial}.
+\end{cases}
+\tag{14}
+$$
+
+#### 3.3.2 Decide
+
+Desired tier from mastery:
+
+$$
+\tau_d(p_t) =
+\begin{cases}
+T_3, & p_t < 0.35,\\
+T_2, & 0.35 \le p_t < 0.60,\\
+T_1, & p_t \ge 0.60.
+\end{cases}
+\tag{15}
+$$
+
+If $i_t=\mathrm{adversarial}$ and $\mathcal{E}.\mathrm{on\_adversarial}=\mathrm{tighten}$, force $\tau_d\leftarrow T_1$. Then $\tau_a=\tau_a(\ell_t,\tau_d)$ by Eq. (4). Response language $\ell_r=\ell_t$ if $M_{\ell_t,\tau_a}=1$, else default $\ell_0$ (typically $\mathrm{en}$).
+
+**Definition 5 (Generation Plan).**
+
+$$
+\pi_t = (\tau_a,\ell_r,\mathrm{auth}_t,i_t,\mathrm{tighten}_t),\qquad
+\mathrm{auth}_t = \mathbf{1}[M_{\ell_r,\tau_a}=1].
+\tag{16}
+$$
+
+**Definition 6 (Disclosure Contract).** Contract $\delta_t=(\ell_r,\tau_a,s_t)$ holds iff $\mathrm{auth}_t=1$, mastery policy approves $\tau_a$, and
+
+$$
+\neg\big(w_t=1 \land \mathrm{LooksFull}(a_{\mathrm{draft}})\big)
+\tag{17}
+$$
+
+is enforced at Reflect (heightened leakage when $w_t=1$).
+
+#### 3.3.3 Act
+
+If $\mathrm{auth}_t=0$, return a non-punitive refusal $\rho(\ell_r)$ with no LLM call. Otherwise,
+
+$$
+a^{\mathrm{raw}}_t = \mathrm{LLM}\big(\Sigma(\tau_a,\ell_r,c,k),\; u_t\big),
+\tag{18}
+$$
+
+with temperature $\theta=0.4$ (Ollama `/api/chat` by default).
+
+#### 3.3.4 Reflect
+
+Leakage score:
+
+$$
+\lambda(a,\tau_a,w_t) = \min\Big(1,\;
+0.6\,\mathbb{I}_{\mathrm{full}}(a)\,\mathbb{I}_{\mathrm{rank}(\tau_a)<\mathrm{rank}(T_4)}
++ 0.3\,\mathbb{I}_{\mathrm{full}}(a)\,\mathbb{I}_{\tau_a\in\{T_1,T_2\}}
++ 0.4\,\mathbb{I}_{\mathrm{full}}(a)\,w_t
++ 0.2\,\mathbb{I}_{N_{\mathrm{code}}(a)\ge 3}\Big),
+\tag{19}
+$$
+
+where $\mathbb{I}_{\mathrm{full}}$ detects solution-like dumps and $N_{\mathrm{code}}$ counts code keywords. Over-disclosure Boolean $od(a,\tau_a)$ flags tier inconsistency. Outcome:
+
+$$
+\omega_t =
+\begin{cases}
+\mathrm{SAFE}, & \lambda<0.5 \land \neg od,\\
+\mathrm{REWRITE}, & \text{violation}\land \mathcal{E}.\mathrm{on\_leakage}=\mathrm{rewrite},\\
+\mathrm{ESCALATE}, & \text{violation}\land \mathcal{E}.\mathrm{on\_leakage}=\mathrm{escalate},\\
+\mathrm{BLOCK}, & \text{violation}\land \mathcal{E}.\mathrm{on\_leakage}=\mathrm{block}.
+\end{cases}
+\tag{20}
+$$
+
+On REWRITE/ESCALATE, $a_t=\mathrm{Rewrite}(a^{\mathrm{raw}}_t,\tau_a,\ell_r)$ (or $T_1$ under escalate). Escalation items are queued if $i_t=\mathrm{adversarial}$ under escalate policy, or if $r_t\ge 2$ consecutive rewrites:
+
+$$
+r_{t+1} =
+\begin{cases}
+r_t+1, & \omega_t=\mathrm{REWRITE},\\
+0, & \text{otherwise}.
+\end{cases}
+\tag{21}
+$$
+
+#### 3.3.5 Remember
+
+$$
+s_{t+1} = \mathrm{Update}(s_t, \mathrm{TurnRecord}_t),
+\tag{22}
+$$
+
+appending history and updating $\mathcal{L}_t$, $p_t$, $\tau^{\mathrm{last}}_t$, $r_t$, $w_t$.
+
+### 3.4 Evaluation Methodology
+
+We follow Design Science Research / FEDS [22]. Let policy compliance for cell $(\ell,\tau)$ be $C_{\ell,\tau}=\mathbf{1}[\mathrm{Engine}(\ell,\tau)=M_{\ell,\tau}]$. Aggregate compliance:
+
+$$
+C = \frac{1}{|L|\,|\mathcal{T}|}\sum_{\ell\in L}\sum_{\tau\in\mathcal{T}} C_{\ell,\tau}.
+\tag{23}
+$$
+
+For intent classification (planned), precision/recall/F1 on balanced labels. For comparative tutoring (planned), mastery gain $\Delta p = p_T-p_0$, leakage rate, and scaffold integrity across four conditions. False-suppression rate measures incorrect blocking of legitimate L2 use.
+
+---
+
+## 4 Practical Implementation
+
+In this section, we describe the practical implementation of TL-Guard. In particular, we describe the implementation setup, execution procedure, sample execution scenarios, and performance evaluation metrics.
+
+### 4.1 Implementation Setup
+
+The software platform is Python 3.11+ with Pydantic v2 models. The rationale for a local Ollama LLM backend is data locality, zero API cost for research demos, and reproducibility without cloud keys. Optional OpenAI is supported when `TL_GUARD_LLM=openai`.
+
+**Hardware (minimum).** A computer system with a modern multi-core CPU, $\ge 8$ GB RAM ($\ge 16$ GB recommended for `llama3`), and persistent storage for model weights meets the requirements for running Ollama and the agent services.
+
+**Software stack.**
+
+**Table 3.** Implementation stack.
+
+| Component | Technology | Role |
+|---|---|---|
+| Agent core | Python, Pydantic | `TLGuardAgent`, typed plans/turns |
+| Act LLM tool | Ollama (`llama3` default) | Constrained generation (Eq. 18) |
+| Mastery | BKT (Eqs. 8–10) | Perceive input |
+| API | FastAPI + Uvicorn | Session/turn/policy HTTP API |
+| UI | Streamlit | Student Buddy + Teacher Console |
+| CLI | Typer (`tl-guard`) | doctor, demo, chat, preview |
+| Config | YAML LSM | Teacher policy $M$, $\mathcal{E}$ |
+| Docs | MkDocs Material | Workflow + paper |
+| Deploy | Docker Compose | API :8000, UI :8501, Docs :8001 |
+
+**Package layout.** Modules mirror Eq. (2): `perceive/`, `decide/`, `act/`, `reflect/`, `remember/`, plus internal `pipeline/turn_pipeline.py` exposing `execute_act_reflect` and `authorize_plan`.
+
+**Environment.**
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev,docs]"
+cp .env.example .env
+ollama pull llama3 && tl-guard doctor
+```
+
+Key variables: `TL_GUARD_LLM`, `TL_GUARD_MODEL`, `TL_GUARD_OLLAMA_BASE_URL` (`http://127.0.0.1:11434` locally; `http://host.docker.internal:11434` in Compose).
+
+**Interfaces.** The Student Buddy selects course/concept and chats in any supported language, displaying $(\ell_t,i_t,\tau_a,\omega_t,p_t)$. The Teacher Console edits $M$ via checkboxes/YAML and resolves escalations.
+
+### 4.2 Execution Procedure
+
+The practical implementation of the proposed framework has the following execution procedure.
+
+**Step 1.** Session creation. The client posts `{course_id, concept}`. The agent loads LSM $M$ for the course and initializes $s_0$ with $p_0=0.30$, $H_0=\emptyset$, $r_0=0$, $w_0=0$.
+
+**Step 2.** Student turn. The client posts `{message: u_t}` to `/sessions/{id}/turns` (or uses Streamlit/CLI). The agent executes `handle_turn`:
+
+- *Step 2.1 (Perceive).* Compute $(\ell_t,\gamma_t,m_t)$ (Eq. 7); update $p_t$ (Eqs. 8–10); classify $i_t$ (Eqs. 11–14).
+- *Step 2.2 (Decide).* Compute $\tau_d$ (Eq. 15), clamp $\tau_a$ (Eq. 4), select $\ell_r$, form plan $\pi_t$ (Eq. 16).
+- *Step 2.3 (Act).* If $\mathrm{auth}_t=0$, return $\rho(\ell_r)$. Else generate $a^{\mathrm{raw}}_t$ (Eq. 18) via Ollama.
+- *Step 2.4 (Reflect).* Compute $\lambda$ (Eq. 19) and $\omega_t$ (Eq. 20); rewrite/block/escalate as required; update $r_t$ (Eq. 21); optionally enqueue teacher review.
+- *Step 2.5 (Remember).* Persist `TurnRecord` and $s_{t+1}$ (Eq. 22).
+
+**Step 3.** Teacher policy update. An authenticated teacher (UI or `PUT /policies/{course_id}`) updates $M$ and $\mathcal{E}$ on disk. The in-memory agent cache is cleared so the next student turn loads the new policy.
+
+**Step 4.** Escalation resolution. Teachers list open escalations, add a resolution note, and mark resolved. This does not automatically alter past student messages; it informs subsequent policy tightening.
+
+**Step 5.** Health verification. `tl-guard doctor` probes Ollama `/api/tags` and a one-sentence completion to validate Act connectivity before demos.
+
+**Illustrative scenario.**
+
+**Table 4.** Three-turn execution trace (Python / loops, `python_intro` LSM).
+
+| $t$ | $u_t$ (abbrev.) | $\ell_t$ | $i_t$ | $\tau_a$ | $\omega_t$ |
+|---|---|---|---|---|---|
+| 0 | How do I write a for loop? | en | none | $T_3$ | SAFE |
+| 1 | loops का मतलब? समझाओ | mixed/hi | legitimate | $T_2$ (clamped) | SAFE |
+| 2 | FULL SOLUTION / पूरा कोड | mixed | adversarial | $T_1$ | ESCALATE |
+
+At $t=2$, the student still receives a safe $T_1$ hint while the teacher queue receives $(u_2,a^{\mathrm{raw}}_2,\mathrm{reason})$.
+
+### 4.3 Performance Evaluation
+
+In this section, we provide a performance evaluation of the proposed agentic framework. We define metrics analogous in spirit to overhead metrics in systems papers [reference style as in editable-blockchain evaluation], adapted to pedagogical policy enforcement.
+
+#### 4.3.1 Metric Definitions
+
+***Policy Compliance Rate ($C$).*** Fraction of LSM cells for which the engine’s authorize/deny decision matches $M$ (Eq. 23). Unit: dimensionless in $[0,1]$.
+
+***Clamp Correctness.*** Fraction of over-request cases $(\ell,\tau_d)$ with $M_{\ell,\tau_d}=0$ for which Eq. (4) returns the maximal feasible tier (or correctly refuses).
+
+***Leakage Score ($\lambda$).*** Continuous Reflect signal in $[0,1]$ (Eq. 19). Higher values indicate over-disclosure risk.
+
+***Scaffold Integrity.*** Empirical rate of turns with $\omega_t=\mathrm{SAFE}$ or successful $\mathrm{REWRITE}$ that remain within $\tau_a$.
+
+***Intent Macro-F1 (planned).*** Standard multi-class F1 on $\{legitimate,adversarial,neutral\}$.
+
+***Mastery Gain (planned).*** $\Delta p = p_T - p_0$ under comparative conditions.
+
+***False Suppression Rate (planned).*** Fraction of human-labeled legitimate L2 turns incorrectly blocked or over-tightened.
+
+#### 4.3.2 Experimental Result on LSM Policy Compliance
+
+In the first set of experiments, we validate every $(\ell,\tau)$ cell across three course configs (`python_intro`, `linear_algebra`, `general_science`), each with $|L|=5$ and $|\mathcal{T}|=4$, yielding $N=60$ cells.
+
+**Table 5.** Effect of course configuration on policy compliance.
+
+| Course Config | Cells $N$ | Correct | $C$ |
 |---|---|---|---|
-| Stance | Welcoming all languages | System prompt + language feature logging | `act/llm_executor.py` |
-| Design | Planning multilingual instruction | Language–Scaffold Matrix (YAML) | `configs/`, `decide/lsm_engine.py` |
-| Shifts | Moment-to-moment adjustments | Per-turn mastery + intent + LSM $\rightarrow$ tier + language selection | `decide/`, `agent.py` |
+| `python_intro` | 20 | 20 | 1.00 |
+| `linear_algebra` | 20 | 20 | 1.00 |
+| `general_science` | 20 | 20 | 1.00 |
+| **Aggregate** | **60** | **60** | **1.00** |
+
+It is observed that compliance remains $C=1.00$ across all configurations. The engine correctly authorizes `true` cells, rejects `false` cells, and applies Eq. (4) clamping (e.g., Hindi $T_3$ request → $T_2$).
+
+#### 4.3.3 Experimental Result on End-to-End Agent Behaviour
+
+In the second set of experiments, automated tests inject a FakeLLM double (production still uses Ollama) and execute: (i) language detection for English, Hindi, and code-mixed inputs; (ii) BKT updates; (iii) legitimate vs adversarial intent cases; (iv) Act refusal when $\mathrm{auth}_t=0$; (v) a three-turn translanguaging session matching Table 4. All 11 automated tests pass. Provider resolution defaults to `OllamaLLM` when `TL_GUARD_LLM=ollama`.
+
+#### 4.3.4 Discussion, Limitations, and Threats to Validity
+
+Results indicate that agent-native Decide/Reflect mechanisms can enforce language-aware scaffolding without eliminating legitimate L2 clarification (Table 4, $t=1$). Limitations include: heuristic LIC; simulation-heavy evaluation pending classroom IRB study; three language pairs; surface-level cultural checks; variance of local LLM quality by language. Threats to validity: keyword-based $\mathbb{I}_{\mathrm{full}}$ may over/under-estimate leakage; FakeLLM may not reproduce all live-model failure modes; internal validity of planned E3 requires matched personas and human annotation.
 
 ---
 
-## 4 TL-Guard Architecture
+## 5 Conclusion and Future Work
 
-### 4.1 Agentic Decision Loop
+In this paper, we proposed TL-Guard, an agentic framework for guardrailed multilingual tutoring under pedagogical safety constraints. Motivated by the tension between translanguaging pedagogy and English-centric safety systems, we formalized an LSM policy matrix $M$, a five-stage agent loop (Eq. 2), BKT mastery updates (Eqs. 8–10), intent scoring (Eqs. 11–14), leakage scoring (Eq. 19), and disclosure contracts that mitigate cross-lingual leakage (Eq. 1). Practical implementation on Python/Ollama/FastAPI/Streamlit demonstrates 100% LSM compliance ($C=1$ over 60 cells) and correct end-to-end behaviour on legitimate and adversarial trajectories.
 
-TL-Guard implements a **goal-driven decision loop** that processes each student message through five sequential stages (Fig. 1). The term "agentic" here denotes a system with *perception, deliberation, action, evaluation, and memory* — not a multi-agent swarm.
-
-**Fig. 1.** TL-Guard agent loop.
-
-```
-Student Message (any language)
-        │
-        ▼
-┌───────────────────────┐
-│     1. PERCEIVE       │  Language detection, mastery estimation (BKT),
-│                       │  intent classification of language switch
-└───────────┬───────────┘
-            ▼
-┌───────────────────────┐
-│     2. DECIDE         │  LSM policy lookup, scaffold tier selection,
-│                       │  response language selection, disclosure contract
-└───────────┬───────────┘
-            ▼
-┌───────────────────────┐
-│     3. ACT            │  Constrained LLM generation via Ollama
-│                       │  (system prompt encodes tier + language + stance)
-└───────────┬───────────┘
-            ▼
-┌───────────────────────┐
-│     4. REFLECT        │  Post-check: leakage scoring, scaffold consistency,
-│                       │  → outcome: SAFE | REWRITE | ESCALATE | BLOCK
-└───────────┬───────────┘
-     ┌──────┴──────┐
-     ▼             ▼
-  Student      Teacher
-  Response     Escalation Queue
-     │
-     ▼
-┌───────────────────────┐
-│     5. REMEMBER       │  Update session: turns, languages, mastery,
-│                       │  consecutive rewrites, last authorized tier
-└───────────────────────┘
-```
-
-We now describe each stage formally.
-
-#### 4.1.1 Stage 1: Perceive
-
-Three perception modules execute in sequence:
-
-**Language Detection.** A script-based heuristic detector identifies the dominant language from a set $L = \{\text{en}, \text{hi}, \text{bn}, \text{es}, \text{mixed}\}$. The detector operates on Unicode range analysis for Devanagari ($\text{U+0900}$–$\text{U+097F}$), Bengali ($\text{U+0980}$–$\text{U+09FF}$), and Latin scripts, supplemented by language-specific keyword cue sets. When multiple scripts or cue sets activate simultaneously, the text is classified as `mixed` (code-mixed), with the primary non-English language identified.
-
-The detection function returns a tuple $(l, c, m)$ where $l \in L$ is the detected language, $c \in [0, 1]$ is confidence, and $m \in \{\text{true}, \text{false}\}$ indicates code-mixing.
-
-**Mastery Estimation.** A Bayesian Knowledge Tracing (BKT) model [21] maintains a per-concept mastery estimate $p(\text{known}) \in [0, 1]$ updated after each turn:
-
-$$p(\text{known}_{t+1}) = \frac{p(\text{known}_t) \cdot (1 - p_s)}{p(\text{known}_t) \cdot (1 - p_s) + (1 - p(\text{known}_t)) \cdot p_g} + (1 - \text{posterior}) \cdot p_t$$
-
-where $p_s$ is the slip probability, $p_g$ is the guess probability, and $p_t$ is the learning rate. The prior $p(L_0) = 0.30$.
-
-Correctness inference is performed via lightweight heuristics: positive engagement cues ("got it", "samajh", "bujhe"), negative cues ("confused", "nahi", "stuck"), and question patterns yield $\text{correct} \in \{\text{true}, \text{false}, \text{null}\}$.
-
-**Intent Classification.** When a language switch is detected ($l_t \neq l_{t-1}$), the Language Intent Classifier (LIC) determines the intent $i \in \{\text{legitimate}, \text{adversarial}, \text{neutral}, \text{none}\}$. The classifier employs a weighted scoring mechanism:
-
-Let $s_a$ denote the adversarial score and $s_l$ the legitimate score. The features contributing to each score are:
-
-| Feature | Contribution | Direction |
-|---|---|---|
-| Answer-seeking keyword patterns (multilingual) | $+0.45$ | $s_a$ |
-| Re-asking a previously posed question | $+0.35$ | $s_a$ |
-| Demanding higher tier than last authorized | $+0.20$ | $s_a$ |
-| Clarification keyword patterns (multilingual) | $+0.35$ | $s_l$ |
-| Low mastery ($< 0.35$) + clarification | $+0.50$ | $s_l$ |
-| L2 use without extraction cues | $+0.20$ | $s_l$ |
-
-The classification rule is:
-$$
-i = \begin{cases}
-\text{adversarial} & \text{if } s_a \geq 0.55 \text{ and } s_a > s_l \\
-\text{legitimate} & \text{if } s_l \geq 0.40 \\
-\text{neutral} & \text{otherwise}
-\end{cases}
-$$
-
-Answer-seeking patterns are defined multilingually: English ("full solution please"), Hindi ("पूरा कोड दे दो"), Bengali ("সম্পূর্ণ উত্তর"), Spanish ("dame la respuesta completa"). Clarification patterns similarly span all supported languages.
-
-#### 4.1.2 Stage 2: Decide
-
-Four decision modules execute in sequence:
-
-1. **Scaffold Selector.** Given mastery $p$ and intent $i$, selects a desired tier $\tau_d$:
-   - If $p < 0.35$: $\tau_d = T3$ (worked example)
-   - If $0.35 \leq p < 0.60$: $\tau_d = T2$ (explanation)
-   - If $p \geq 0.60$: $\tau_d = T1$ (hint)
-   - If $i = \text{adversarial}$ and escalation policy is "tighten": $\tau_d = T1$ regardless
-
-2. **LSM Engine.** Clamps $\tau_d$ to the maximum authorized tier for the detected language: $\tau_a = \text{clamp}(\tau_d, l)$ per Definition 2.
-
-3. **Language Selector.** Determines the response language $l_r$. If $\tau_a$ is authorized for $l_t$ (the student's language), then $l_r = l_t$. Otherwise, falls back to the default language.
-
-4. **Disclosure Checker.** Verifies the final plan $(\tau_a, l_r)$ against the LSM. If unauthorized, the plan is marked `authorized = false` and the pipeline will refuse without calling the LLM.
-
-The output is a **GenerationPlan**: $(\tau_a, l_r, \text{authorized}, i, \text{tighten})$.
-
-#### 4.1.3 Stage 3: Act (Harness Pipeline)
-
-The harness pipeline implements a three-phase safety path:
-
-**Phase 1 — Verify.** If the GenerationPlan is not authorized ($\text{authorized} = \text{false}$), the pipeline returns a non-punitive refusal message in the student's language *without calling the LLM*. This prevents unnecessary computation and eliminates any possibility of LLM over-disclosure on unauthorized requests.
-
-**Phase 2 — Constrained LLM Generation.** The LLM (Ollama, running locally) receives a system prompt encoding:
-- The translanguaging-affirmative stance (Section 3.1)
-- Course and concept context
-- The authorized scaffold tier with explicit tier instructions (Table 2)
-- The response language directive
-
-The tier instructions serve as behavioral constraints:
-- T1: "Give only a short nudge or hint. Do NOT provide worked steps, full code, or the final answer."
-- T2: "Give a conceptual explanation in the student's terms. Do NOT provide a full worked solution or complete code."
-- T3: "Give a worked example with key steps. Omit the final boxed answer or complete copy-paste solution if possible."
-- T4: "You may provide a full solution. Still teach; do not just dump code without explanation."
-
-**Phase 3 — Post-Check (Reflect).** The generated response is evaluated by two reflection modules:
-
-**Leakage Detector.** Computes a leakage score $\lambda \in [0, 1]$ based on:
-- Presence of solution-indicative patterns (code blocks, complete functions, `return` statements) when tier $< T4$: $+0.6$
-- Solution patterns at restrictive tiers (T1, T2): additional $+0.3$
-- Prior withheld content in another language + solution detected: $+0.4$
-- Dense code token density ($\geq 3$ keywords from $\{\text{def}, \text{return}, \text{for}, \text{while}, \text{class}\}$): $+0.2$
-
-**Scaffold Consistency Checker.** Binary check: does the response exceed the authorized tier? A response at T1/T2 that contains a complete code solution is flagged.
-
-The post-check outcome determines the pipeline result:
-
-$$
-\text{outcome} = \begin{cases}
-\text{SAFE} & \text{if } \lambda < 0.5 \text{ and no over-disclosure} \\
-\text{REWRITE} & \text{if violation detected and policy} = \text{"rewrite"} \\
-\text{ESCALATE} & \text{if violation detected and policy} = \text{"escalate"} \\
-\text{BLOCK} & \text{if violation detected and policy} = \text{"block"}
-\end{cases}
-$$
-
-When the outcome is REWRITE, the response is automatically stripped to the authorized tier using a rewriter module that truncates code blocks, replaces solution content with tier-appropriate summaries, and preserves the pedagogical tone.
-
-### 4.2 Translanguaging-Aware Disclosure Contracts
-
-We extend the auditable release control framework [17] with language-specific authorization:
-
-**Definition 3 (Translanguaging-Aware Disclosure Contract).** A disclosure contract $\delta = (l, \tau, s)$ authorizes the system to disclose information at scaffold tier $\tau$ in language $l$ for session $s$, subject to:
-1. $\text{LSM}[l][\tau] = \text{true}$ (matrix authorization)
-2. The mastery-based scaffold selector approves $\tau$ (contextual authorization)
-3. No prior contract in the same session withheld content of equal or greater tier in any language (cross-lingual consistency)
-
-Condition 3 is critical: it prevents the system from disclosing in Hindi what it correctly withheld in English. The leakage detector's `prior_withheld` flag tracks whether any previous turn in a different language resulted in a BLOCK or REWRITE outcome, and if so, applies heightened scrutiny ($+0.4$ to the leakage score).
-
-### 4.3 Automatic Escalation
-
-Two escalation mechanisms operate:
-
-1. **Intent-driven escalation.** If the LIC classifies intent as adversarial and the LSM's `on_adversarial_intent` policy is "escalate", the response is tightened to T1 and an escalation item is queued for teacher review.
-
-2. **Consecutive rewrite escalation.** If the LLM over-discloses on $\geq 2$ consecutive turns (each requiring a rewrite), the third violation automatically escalates to the teacher queue regardless of intent classification. This catches systematic model misbehavior on specific concepts.
-
-Each escalation item records: session ID, turn index, student message, draft LLM response (pre-rewrite), reason, and recommended action.
-
----
-
-## 5 Implementation
-
-### 5.1 System Architecture
-
-TL-Guard is implemented as an independent Python (3.11+) package organized into five sub-packages mirroring the agent loop (Table 4).
-
-**Table 4.** Package organization and module responsibilities.
-
-| Package | Module | Responsibility |
-|---|---|---|
-| `perceive/` | `language_detector.py` | Script + keyword heuristic language detection |
-| | `mastery_tracker.py` | Bayesian Knowledge Tracing (BKT) |
-| | `intent_classifier.py` | Language-switch intent classification |
-| | `session_state.py` | Session store and history management |
-| `decide/` | `lsm_engine.py` | LSM loading and tier authorization |
-| | `scaffold_selector.py` | Mastery-based tier selection |
-| | `language_selector.py` | Response language selection |
-| | `disclosure_checker.py` | Disclosure contract verification |
-| `act/` | `llm_executor.py` | OllamaLLM / OpenAILLM backends |
-| | `rewriter.py` | Tier-constrained response rewriting |
-| | `refusal_generator.py` | Non-punitive refusal messages |
-| `reflect/` | `post_checker.py` | Leakage + scaffold post-check orchestration |
-| | `leakage_detector.py` | Cross-lingual leakage scoring |
-| | `scaffold_checker.py` | Tier over-disclosure detection |
-| | `escalation.py` | Teacher escalation queue |
-| `remember/` | `session_updater.py` | Session state persistence |
-| `pipeline/` | `turn_pipeline.py` | Verify → LLM → Post-Check → Output |
-
-### 5.2 Technology Stack
-
-**Table 5.** Technology stack.
-
-| Component | Technology | Rationale |
-|---|---|---|
-| Agent core | Python 3.11+, Pydantic v2 | Type safety, validation, serialization |
-| LLM backend | Ollama (default: llama3) | Local inference, no API key, data privacy |
-| LLM backend (optional) | OpenAI API (gpt-4o-mini) | Higher-quality generation when available |
-| Knowledge tracing | Bayesian Knowledge Tracing | Established in ITS literature [21] |
-| Student/Teacher UI | Streamlit | Rapid prototyping for research evaluation |
-| REST API | FastAPI | Async, auto-documented OpenAPI |
-| CLI | Typer | Developer and experiment tooling |
-| Configuration | YAML (LSM policies) | Human-readable, teacher-editable |
-| Documentation | MkDocs Material | Comprehensive project documentation |
-
-### 5.3 LLM Integration
-
-TL-Guard does not employ a mock LLM. All generation calls are routed to a real model:
-
-- **Default: Ollama** — A local LLM daemon serving models such as `llama3` or `codellama`. Calls are made via HTTP POST to `/api/chat` with `stream: false`, system + user messages, and $\text{temperature} = 0.4$.
-- **Optional: OpenAI** — When `TL_GUARD_LLM=openai` and `OPENAI_API_KEY` are set.
-
-The `LLMClient` protocol defines a single method `complete(system: str, user: str) → str`, allowing transparent backend switching and test double injection.
-
-### 5.4 Student Interface
-
-A Streamlit-based chat interface (Fig. 2a) provides:
-- Course selection from available LSM policies
-- Concept specification for BKT tracking
-- Multilingual chat input accepting English, Hindi (Devanagari), Bengali, Spanish, and code-mixed text
-- Per-turn metadata display: detected language, scaffold tier, intent classification, policy outcome
-- Session panel: mastery gauge, languages used, turn count
-
-### 5.5 Teacher Interface
-
-A dual-tab Streamlit interface (Fig. 2b) provides:
-
-**LSM Editor tab:**
-- Visual checkbox matrix (languages × tiers) for intuitive policy editing
-- Escalation policy dropdowns (on adversarial intent: warn/tighten/escalate/block; on leakage: rewrite/escalate/block)
-- Raw YAML editor for power users
-- LSM preview: test what tier a given language/mastery combination authorizes
-
-**Escalations tab:**
-- Queue of flagged turns with expandable detail: student message, draft LLM response (pre-intervention), reason, recommended action
-- One-click resolution with optional note
-
----
-
-## 6 Evaluation
-
-### 6.1 Evaluation Design
-
-We adopt a Design Science Research (DSR) methodology [22] with five evaluation experiments:
-
-**Table 6.** Evaluation experiments.
-
-| Experiment | Measures | Design |
-|---|---|---|
-| E1: LSM Policy Validation | Policy compliance rate | All language × tier cells across all LSM configs |
-| E2: Intent Classification | Precision, Recall, F1 | Balanced dataset: 500 legitimate + 500 adversarial instances |
-| E3: Comparative Tutoring | Mastery gain, leakage rate, scaffold integrity | 5 personas × 3 lang. pairs × 4 conditions × 10 concepts × 5 turns |
-| E4: False Suppression | False positive rate on legitimate translanguaging | Human-annotated subset of E3 |
-| E5: Teacher Usability | SUS score, task completion rate | 5 multilingual educators configuring LSM |
-
-The four conditions in E3 are:
-1. English-only tutoring (no language mixing)
-2. Unguardrailed multilingual tutoring (LLM responds in any language without constraints)
-3. Content-safety-guardrailed multilingual tutoring (NeMo-style refusals)
-4. TL-Guard (full system with LSM, LIC, and post-check)
-
-### 6.2 Preliminary Results: E1 — LSM Policy Validation
-
-We validated the LSM enforcement engine across three course configurations (`python_intro`, `linear_algebra`, `general_science`), testing every $(\ell, \tau)$ cell in each matrix.
-
-**Table 7.** E1 results: LSM policy compliance.
-
-| Course Config | Languages | Tiers | Cells Tested | Compliance |
-|---|---|---|---|---|
-| `python_intro` | 5 | 4 | 20 | 20/20 (100%) |
-| `linear_algebra` | 5 | 4 | 20 | 20/20 (100%) |
-| `general_science` | 5 | 4 | 20 | 20/20 (100%) |
-| **Total** | | | **60** | **60/60 (100%)** |
-
-For every cell, the LSM engine correctly:
-- Authorized tiers marked `true`
-- Rejected tiers marked `false`
-- Clamped over-requested tiers to the maximum authorized level
-- Applied the correct response language fallback when a tier was unavailable in the requested language
-
-### 6.3 Preliminary Results: Unit Test Suite
-
-The automated test suite validates:
-- Language detection accuracy across English, Hindi, Bengali, code-mixed inputs
-- BKT mastery tracking convergence
-- Intent classification for legitimate and adversarial switch scenarios
-- Pipeline verify/block behavior on unauthorized plans
-- End-to-end three-turn translanguaging session (English → Hindi → adversarial extraction)
-- LLM provider defaults to Ollama (no mock in production)
-
-All tests pass using an injected `FakeLLM` test double.
-
----
-
-## 7 Discussion
-
-### 7.1 Resolution of the Safety–Translanguaging Tension
-
-TL-Guard resolves the design tension identified in Section 1.2 by treating safety and translanguaging as **complementary rather than conflicting**. The LSM enables teachers to express nuanced policies: "Hindi for conceptual understanding (T1–T2), English for technical practice (T3), no full solutions in any language." The intent classifier separates productive language-switching from extraction attempts. The post-check catches what the constrained prompt fails to prevent.
-
-This resolution is novel: existing systems make a binary choice — either block language mixing (safety-first) or permit it unconditionally (translanguaging-first). TL-Guard enables **controlled translanguaging** where the degree of control is specified by the teacher, not hard-coded by the system.
-
-### 7.2 Agentic Architecture vs. Chatbot Architecture
-
-The five-stage loop is architecturally necessary. A chatbot would generate any response the LLM produces. TL-Guard's loop ensures that:
-- **Perceive** provides context that a stateless prompt cannot (mastery history, language switch patterns)
-- **Decide** applies policy *before* generation, not after
-- **Act** constrains the generation space
-- **Reflect** catches what constraints alone fail to prevent
-- **Remember** ensures temporal coherence across the session
-
-Each stage addresses a failure mode of the previous: the LLM might ignore tier instructions (caught by Reflect); the intent classifier might miss adversarial patterns (caught by the consecutive rewrite escalation in Remember).
-
-### 7.3 Teacher Agency and Pedagogical Control
-
-The LSM gives teachers agency over AI behavior without requiring understanding of prompt engineering, model internals, or NLP concepts. A teacher configures a policy matrix and escalation behavior; the system enforces these decisions at runtime. This aligns with García et al.'s Design principle: the teacher *plans* the multilingual instructional design; TL-Guard *executes* it.
-
-### 7.4 Limitations
-
-1. **Simulated evaluation.** Current evaluation uses simulated learner personas and a test double; validation with real students is planned under IRB approval.
-2. **Heuristic classifiers.** The language detector and intent classifier use rule-based heuristics. A learned classifier (fine-tuned on annotated translanguaging data) would improve accuracy, particularly for ambiguous cases.
-3. **Limited linguistic diversity.** Three language pairs (En–Hi, En–Bn, En–Es) do not represent the full spectrum of multilingual educational contexts. Extension to Tamil, Telugu, Mandarin, and African languages is planned.
-4. **Cultural appropriateness.** The current system does not perform cultural appropriateness checking beyond language-level constraints. Cross-cultural pedagogical norms may require additional policy dimensions.
-5. **LLM quality assumption.** The system assumes the local LLM (Ollama/llama3) generates reasonable output in all supported languages. Generation quality degrades for lower-resource languages.
-6. **Scalability.** Session state is stored in memory. A production deployment would require persistent storage with concurrent access control.
-
-### 7.5 Threats to Validity
-
-**Internal validity.** The FakeLLM test double may not reproduce the full range of real LLM behaviors, particularly adversarial over-disclosure patterns. Validation with live models is required.
-
-**External validity.** Findings may not generalize beyond the three tested language pairs or the three course domains.
-
-**Construct validity.** The leakage score heuristic uses keyword-based detection, which may both over-count (false positives on legitimate code examples) and under-count (paraphrased solutions).
-
----
-
-## 8 Conclusion and Future Work
-
-We presented TL-Guard, the first agentic AI tutoring architecture that integrates translanguaging pedagogy theory with formal pedagogical safety constraints. Our five contributions address a previously unresolved tension between safety systems (which treat code-switching as suspicious) and translanguaging pedagogy (which treats it as essential):
-
-1. **C1:** The first computational operationalization of García et al.'s Stance/Design/Shifts framework for AI agent design.
-2. **C2:** The Language–Scaffold Matrix (LSM), a teacher-configurable YAML policy enabling per-tier, per-language pedagogical control.
-3. **C3:** Translanguaging-aware disclosure contracts with cross-lingual consistency enforcement.
-4. **C4:** A Language Intent Classifier distinguishing legitimate translanguaging from adversarial language-switching.
-5. **C5:** A complete open-source implementation with agentic decision loop, local LLM backend, and dual-role web interfaces.
-
-Preliminary evaluation demonstrates 100% LSM policy compliance across 60 matrix cells and correct end-to-end behavior on translanguaging sessions.
-
-**Future work** includes: (i) real classroom deployment with IRB approval; (ii) a learned intent classifier trained on annotated translanguaging corpora; (iii) extension to additional language pairs (Tamil, Telugu, Mandarin); (iv) voice-based translanguaging support; (v) adaptive LSM policies that evolve from teacher correction patterns; (vi) integration with the XL-CRA cross-lingual risk accumulation framework for trajectory-level safety monitoring.
+Future work includes: (i) IRB-approved classroom deployment; (ii) learned intent classifiers trained on annotated translanguaging corpora; (iii) extension to Tamil, Telugu, Mandarin, and additional Indian languages; (iv) voice-based translanguaging; (v) adaptive LSM updates from teacher corrections; and (vi) integration with trajectory-level cross-lingual risk monitoring.
 
 ---
 
 ## References
 
-[1] García, O., Johnson, S. I., & Seltzer, K. (2017). *The Translanguaging Classroom: Leveraging Student Bilingualism for Learning.* Caslon Publishing.
+[1] García, O., Johnson, S. I., & Seltzer, K. (2017). *The Translanguaging Classroom.* Caslon Publishing.
 
-[2] García, O. (2009). *Bilingual Education in the 21st Century: A Global Perspective.* Wiley-Blackwell.
+[2] García, O. (2009). *Bilingual Education in the 21st Century.* Wiley-Blackwell.
 
-[3] García, O., & Li Wei. (2014). *Translanguaging: Language, Bilingualism and Education.* Palgrave Macmillan. https://doi.org/10.1057/9781137385765
+[3] García, O., & Li Wei. (2014). *Translanguaging: Language, Bilingualism and Education.* Palgrave Macmillan.
 
-[4] Cummins, J. (1979). Linguistic Interdependence and the Educational Development of Bilingual Children. *Review of Educational Research*, 49(2), 222–251. https://doi.org/10.3102/00346543049002222
+[4] Cummins, J. (1979). Linguistic Interdependence and the Educational Development of Bilingual Children. *Review of Educational Research*, 49(2), 222–251.
 
-[5] Cummins, J. (2000). *Language, Power and Pedagogy: Bilingual Children in the Crossfire.* Multilingual Matters.
+[5] Cummins, J. (2000). *Language, Power and Pedagogy.* Multilingual Matters.
 
-[6] KiKo-Prim. (2026). AI-Supported Translanguaging in Primary School. *Technology, Knowledge and Learning*, Springer. https://doi.org/10.1007/s10758-026-XXXXX
+[6] KiKo-Prim. (2026). AI-Supported Translanguaging in Primary School. *Technology, Knowledge and Learning*, Springer.
 
-[7] Walter. (2026). AI-Powered Learning Buddy for Non-Native English Speakers. *Asia Pacific Journal of Educators and Education*, 41(1), 1–20.
+[7] Walter. (2026). AI-Powered Learning Buddy for Non-Native English Speakers. *Asia Pacific Journal of Educators and Education*.
 
-[8] GurukulAI. (2026). Hindi–English NCERT-Aligned Tutoring Using LLaMA 3.1 8B with RAG. *arXiv preprint* arXiv:2607.XXXXX.
+[8] GurukulAI. (2026). Hindi–English NCERT-Aligned Tutoring Using LLaMA 3.1 8B with RAG. *arXiv preprint*.
 
-[9] Acharjo. (2025). Regionalized StudentGPT: Curriculum-Aligned Multilingual Tutoring for Bengali and Assamese. *International Science Journal of Education and Mathematics (ISJEM)*.
+[9] Acharjo. (2025). Regionalized StudentGPT. *ISJEM*.
 
-[10] SafeTutors. (2026). Pedagogical Harm in Multi-Turn AI Tutoring. *ACL Rolling Review*.
+[10] SafeTutors. (2026). Pedagogical Harm in Multi-Turn AI Tutoring. *ACL ARR*.
 
-[11] SHAPE. (2026). Graph-Augmented Mastery-Aware Tutoring Pipeline. *Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (ACL)*.
+[11] SHAPE. (2026). Graph-Augmented Mastery-Aware Tutoring Pipeline. *ACL*.
 
-[12] Rebedea, T., Dinu, R., Sreedhar, M., Parisien, C., & Cohen, J. (2023). NeMo Guardrails: A Toolkit for Controllable and Safe LLM Applications with Programmable Rails. *arXiv preprint* arXiv:2310.10501.
+[12] Rebedea, T., et al. (2023). NeMo Guardrails. *arXiv:2310.10501*.
 
-[13] Deng, Y., et al. (2024). MultiJail: Multilingual Jailbreaking of Large Language Models. *Proceedings of NAACL 2024*.
+[13] Deng, Y., et al. (2024). MultiJail. *NAACL*.
 
-[14] CSRT. (2025). Code-Switching Red-Teaming of Large Language Models. *Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (ACL)*.
+[14] CSRT. (2025). Code-Switching Red-Teaming. *ACL*.
 
-[15] 7S Samiti. (2025). Production-Deployed AI Tutor for Rural India with Voice-First Interface and Code-Switching Support. *Deployment report*.
+[15] 7S Samiti. (2025). AI Tutor for Rural India. *Deployment report*.
 
-[16] Simulating LLM-to-LLM Multilingual Math Tutoring. (2025). *arXiv preprint* arXiv:2506.XXXXX.
+[16] Simulating LLM-to-LLM Multilingual Math Tutoring. (2025). *arXiv preprint*.
 
-[17] Auditable Release Control. (2026). Formalizing Disclosure Contracts for AI Tutoring. *arXiv preprint* arXiv:2608.XXXXX.
+[17] Auditable Release Control. (2026). *arXiv preprint*.
 
-[18] Translanguaging in STEM Education Meta-Synthesis. (2026). *Education Sciences (MDPI)*, 16(X), XX–XX.
+[18] Translanguaging in STEM Meta-Synthesis. (2026). *Education Sciences (MDPI)*.
 
-[19] EvalGuard Education Agent. (2026). Policy-as-Code for Educational AI Agents.
+[19] EvalGuard Education Agent. (2026).
 
-[20] Indian Multilingual Prompt Injection. (2026). Hindi and Hinglish Injection Detection with 99.70% Accuracy. *Scientific Reports (Nature)*, 16, XXXXX.
+[20] Indian Multilingual Prompt Injection. (2026). *Scientific Reports*.
 
-[21] Corbett, A. T., & Anderson, J. R. (1994). Knowledge Tracing: Modeling the Acquisition of Procedural Knowledge. *User Modeling and User-Adapted Interaction*, 4(4), 253–278. https://doi.org/10.1007/BF01099821
+[21] Corbett, A. T., & Anderson, J. R. (1994). Knowledge Tracing. *UMUAI*, 4(4), 253–278.
 
-[22] Venable, J., Pries-Heje, J., & Baskerville, R. (2016). FEDS: A Framework for Evaluation in Design Science Research. *European Journal of Information Systems*, 25(1), 77–89. https://doi.org/10.1057/ejis.2014.36
+[22] Venable, J., Pries-Heje, J., & Baskerville, R. (2016). FEDS. *EJIS*, 25(1), 77–89.
 
 ---
 
-## Appendix A: LSM YAML Schema
+## Appendix A: Example LSM ($M$) for `python_intro`
 
-```yaml
-course_id: string          # unique course identifier (required)
-name: string               # human-readable name (required)
-description: string        # course description
-default_language: string   # fallback language (default: "en")
-languages: [string]        # supported language codes
-tiers: [T1, T2, T3, T4]   # scaffold tiers (always T1–T4)
-topics: [string]           # curriculum topics
-matrix:                    # the core policy
-  <language_code>:
-    T1: boolean
-    T2: boolean
-    T3: boolean
-    T4: boolean
-escalation:
-  on_adversarial_intent: warn | tighten | escalate | block
-  on_leakage: rewrite | escalate | block
-  on_policy_violation: rewrite | escalate | block
-```
+$$
+\begin{array}{c|cccc}
+ & T_1 & T_2 & T_3 & T_4 \\ \hline
+\mathrm{en} & 1 & 1 & 1 & 0 \\
+\mathrm{hi} & 1 & 1 & 0 & 0 \\
+\mathrm{bn} & 1 & 1 & 0 & 0 \\
+\mathrm{es} & 1 & 1 & 1 & 0 \\
+\mathrm{mixed} & 1 & 1 & 0 & 0 \\
+\end{array}
+$$
 
-## Appendix B: System Prompt Template
+## Appendix B: System Prompt Composition (Eq. 6)
 
 ```
-You are TL-Guard, a multilingual tutoring buddy.
-Translanguaging is welcome: students may mix languages.
-Never punish or shame language mixing.
-Stay within the authorized scaffold tier and response language.
-
-Course: {course}. Concept: {concept}.
-Authorized scaffold tier: {tier}. {tier_instruction}
-{language_instruction}
+Σ_stance: Translanguaging welcome; never punish language mixing.
+Σ_tier(T1): short nudge only; no full code/answer.
+Σ_tier(T2): conceptual explanation; no full solution.
+Σ_tier(T3): worked example; omit final boxed answer if possible.
+Σ_tier(T4): full solution allowed; still teach.
+Σ_lang: Respond in {en|hi|bn|es|mixed}.
+Σ_ctx: Course={c}, Concept={k}.
 ```
-
-## Appendix C: Supported Language Detection Patterns
-
-**Table 8.** Language detection features.
-
-| Language | Script Detection | Keyword Cue Examples |
-|---|---|---|
-| English | Latin without Devanagari/Bengali | what, how, explain, loop, function |
-| Hindi | Devanagari (U+0900–U+097F) | kya, hai, matlab, samjhao, batao |
-| Bengali | Bengali script (U+0980–U+09FF) | ki, kore, bolo, bujhte, amake |
-| Spanish | Latin + diacritics (á, é, ñ, ¿, ¡) | que, como, explicame, ayuda |
-| Mixed | Multiple scripts simultaneously | Devanagari + Latin → Hinglish |
-
-## Appendix D: Intent Classification Patterns
-
-**Table 9.** Multilingual adversarial and clarification patterns.
-
-| Category | Language | Pattern |
-|---|---|---|
-| Adversarial | English | "full solution please", "just give me the answer" |
-| Adversarial | Hindi | "पूरा कोड दे दो", "सीधा जवाब" |
-| Adversarial | Bengali | "সম্পূর্ণ উত্তর" |
-| Adversarial | Spanish | "dame la respuesta completa" |
-| Legitimate | English | "what does X mean", "explain in simple" |
-| Legitimate | Hindi | "समझाओ", "मतलब" |
-| Legitimate | Bengali | "বোঝাও" |
-| Legitimate | Spanish | "explícame" |

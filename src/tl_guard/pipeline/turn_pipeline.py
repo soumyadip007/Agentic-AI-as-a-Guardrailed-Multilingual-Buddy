@@ -1,4 +1,12 @@
-"""TL-Guard turn pipeline: verify → LLM → post-check → output."""
+"""Agent Act + Reflect execution path.
+
+After Decide produces a GenerationPlan, this module:
+1. authorize_plan — gate Act if the plan is unauthorized
+2. Act — call the LLM tool with a constrained system prompt
+3. Reflect — post-check for leakage / over-disclosure; rewrite, escalate, or block
+
+This is an internal stage of TLGuardAgent, not a separate product wrapper.
+"""
 
 from __future__ import annotations
 
@@ -19,14 +27,18 @@ class PipelineResult:
     raw_llm_text: str
 
 
-def verify(plan: GenerationPlan) -> tuple[bool, str]:
-    """Layer 1 verification gate."""
+def authorize_plan(plan: GenerationPlan) -> tuple[bool, str]:
+    """Act gate: Decide already chose the plan; refuse generation if unauthorized."""
     if not plan.authorized:
         return False, plan.reason or "disclosure not authorized"
     return True, "ok"
 
 
-def run_pipeline(
+# Backward-compatible alias (prefer authorize_plan)
+verify = authorize_plan
+
+
+def execute_act_reflect(
     *,
     llm: LLMClient,
     plan: GenerationPlan,
@@ -37,7 +49,8 @@ def run_pipeline(
     on_leakage: str = "rewrite",
     on_policy_violation: str = "rewrite",
 ) -> PipelineResult:
-    ok, reason = verify(plan)
+    """Run Act (LLM) then Reflect (post-check) for one agent turn."""
+    ok, reason = authorize_plan(plan)
     if not ok:
         text = generate_refusal(plan.response_language, reason)
         pc = PostCheckResult(ok=False, outcome=PolicyOutcome.BLOCK, reasons=[reason])
@@ -89,3 +102,7 @@ def run_pipeline(
         post_check=pc,
         raw_llm_text=raw,
     )
+
+
+# Backward-compatible alias (prefer execute_act_reflect)
+run_pipeline = execute_act_reflect
