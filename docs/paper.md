@@ -5,7 +5,7 @@ Soumyadip Chowdhury^{1}
 
 ---
 
-**Abstract.** In multilingual classrooms, students routinely mix languages while learning—a practice known as *translanguaging*. Contemporary AI tutors either force a single language or allow unconstrained multilingual chat that collapses scaffolding and leaks full solutions across languages. We propose **TL-Guard**, an agentic multilingual buddy with a closed loop **Perceive → Decide → Act → Reflect → Remember**, where the LLM is used only as a tool inside Act. Pedagogical self-regulation is expressed as a frozen **Scaffold Map**—a language×scaffold-tier table that caps how much help may be given in each language—while Act first retrieves local curriculum snippets so generation is context-grounded. A language-intent classifier separates legitimate clarification from adversarial answer-seeking, and Reflect rewrites or blocks over-disclosure. Unlike teacher-console policy harnesses, TL-Guard ships as a student-only buddy: the Scaffold Map is a fixed research artifact, not a live editor. We implement TL-Guard with Ollama, FastAPI, and Streamlit. Performance evaluation reports 100% Scaffold Map compliance over 60 language–tier cells, successful context retrieval on seeded concepts, and correct behaviour on legitimate and adversarial translanguaging trajectories.
+**Abstract.** In multilingual classrooms, students routinely mix languages while learning—a practice known as *translanguaging*. Contemporary AI tutors either force a single language or allow unconstrained multilingual chat that collapses scaffolding and leaks full solutions across languages. We propose **TL-Guard**, an agentic multilingual buddy with a closed decision loop **Perceive → Decide → Act → Reflect → Remember**, where the large language model is used only as a tool inside Act, never as an unconstrained chatbot. Pedagogical self-regulation is expressed as a frozen **Scaffold Map**: for each supported language, the map states which help levels are allowed—from a short hint, through a conceptual explanation and a worked example, up to a full solution—so the buddy cannot over-help merely because the student switched languages. Before generation, Act retrieves short curriculum notes from a local knowledge base so replies stay grounded in course content rather than free invention. A language-intent classifier separates legitimate clarification from adversarial answer-seeking, and Reflect rewrites or blocks drafts that over-disclose. Unlike teacher-console policy harnesses, TL-Guard is a student-only buddy: the Scaffold Map is a fixed research artifact, not a live editor. We implement the system in Python with a local Ollama backend, FastAPI, and Streamlit, and release configuration and curriculum files for reproducibility. Performance evaluation reports full Scaffold Map compliance across three courses and sixty authorization cells, successful context retrieval on seeded concepts such as Python loops, and correct behaviour on legitimate Hindi/mixed clarification versus adversarial full-solution requests after a language switch.
 
 **Keywords:** Translanguaging · Agentic AI · Scaffold Map · Pedagogical Safety · Multilingual Tutoring · Context-Grounded Generation · Guardrails
 
@@ -22,7 +22,7 @@ We address this with **TL-Guard** (TransLanguaging-Aware Guardrailed AI Buddy): 
 **Contributions.**
 
 - **C1.** A single educational agent loop (Perceive → Decide → Act → Reflect → Remember) with the LLM subordinated as an Act tool.
-- **C2.** The **Scaffold Map**: a clear, fixed language×scaffold authorization table with adversarial tighten rules (no teacher console).
+- **C2.** The **Scaffold Map**: a fixed table of allowed help levels per language, with adversarial tighten rules (no teacher console).
 - **C3.** **Context-grounded Act**: retrieve curriculum snippets before generation.
 - **C4.** Translanguaging-aware intent classification and disclosure contracts against cross-lingual leakage.
 - **C5.** An open student-buddy stack (Ollama, FastAPI, Streamlit, Docker) with Scaffold Map YAML and a local knowledge base.
@@ -83,13 +83,13 @@ TL-Guard is guided by four design principles that translate translanguaging peda
 | ID | Design principle | Computational artifact |
 |---|---|---|
 | DP1 | Stance as resource | Affirmative system prompt; language switches logged as session features; no penalty for L2 or code-mixed input |
-| DP2 | Design as Scaffold Map + KB | Frozen language×tier Scaffold Map; local curriculum knowledge base under `data/kb/` |
+| DP2 | Design as Scaffold Map + KB | Frozen Scaffold Map of allowed help levels per language; local curriculum knowledge base under `data/kb/` |
 | DP3 | Shifts as per-turn Decide | Mastery (BKT) + intent → tier/language clamp under the Scaffold Map; disclosure contract |
 | DP4 | LLM-as-tool with Reflect | Authorize before generate; retrieve then LLM; rewrite/block; research audit log only |
 
 **DP1 — Stance as resource.** Following García et al. [1], multilingualism is treated as an asset. The Act system prompt explicitly welcomes translanguaging and forbids shaming language mixing. Detected languages are appended to the session’s language set and used as features for Decide and Reflect, not as attack flags by default. Code-mixed utterances (e.g., Hinglish) are accepted as a first-class class (`mixed`).
 
-**DP2 — Design as Scaffold Map and curriculum context.** Human Design plans *which* multilingual resources are available for *which* instructional goals. TL-Guard materializes Design as (i) a frozen **Scaffold Map**—a Boolean table stating which scaffold tiers (T1–T4) may be delivered in which languages—and (ii) a **curriculum knowledge base** of short concept notes used to ground Act. Both are research/developer artifacts (YAML and markdown), not a live teacher policy console. This keeps pedagogical Design explicit and auditable while differentiating TL-Guard from harness UIs.
+**DP2 — Design as Scaffold Map and curriculum context.** Human Design plans *which* multilingual resources are available for *which* instructional goals. TL-Guard materializes Design as (i) a frozen **Scaffold Map**—for each supported language, which help levels may be delivered (hint, explanation, worked example, or full solution)—and (ii) a **curriculum knowledge base** of short concept notes used to ground Act. Both are research/developer artifacts (YAML and markdown), not a live teacher policy console. This keeps pedagogical Design explicit and auditable while differentiating TL-Guard from harness UIs.
 
 **DP3 — Shifts as per-turn Decide.** Classroom Shifts adjust help moment-to-moment. Each student turn, Perceive estimates language, mastery, and switch intent; Decide selects a desired scaffold from mastery, then *clamps* it to the Scaffold Map for the response language, and forms a disclosure-consistent generation plan. Legitimate clarification in L2 remains possible within map bounds; adversarial answer-seeking triggers fixed tighten (or block) rules.
 
@@ -99,7 +99,7 @@ TL-Guard is guided by four design principles that translate translanguaging peda
 
 ### 3.2 Scaffold Map
 
-A **Scaffold Map** for a course is a Boolean table over supported languages (English, Hindi, Bengali, Spanish, mixed) and tiers T1–T4: an entry is true if and only if that tier may be delivered in that language. Accompanying fixed rules state what to do on adversarial intent (typically *tighten* to T1) and on leakage (*rewrite* or *block*). The map is **not** edited through a product UI; researchers may change YAML offline and restart.
+A **Scaffold Map** for a course records, for each supported language (English, Hindi, Bengali, Spanish, and mixed), which help levels are allowed: T1 (hint), T2 (conceptual explanation), T3 (worked example), and T4 (full solution). An entry is allowed only when that help level may be delivered in that language. Accompanying fixed rules state what to do on adversarial intent (typically *tighten* to T1) and on leakage (*rewrite* or *block*). The map is **not** edited through a product UI; researchers may change YAML offline and restart.
 
 Conceptually, Decide *clamps* any desired tier to the highest allowed tier for the response language. If nothing is authorized, Act refuses without calling the LLM. This gives the Scaffold Map a clear identity: it is the buddy’s **help map**—which languages may receive which scaffold tiers.
 
@@ -236,7 +236,7 @@ The software platform is Python 3.11+ with Pydantic v2 models. The rationale for
 | Component | Technology | Role |
 |---|---|---|
 | Agent core | Python, Pydantic | `TLGuardAgent`, typed plans/turns |
-| Decide | Scaffold Map YAML | Frozen language×tier table |
+| Decide | Scaffold Map YAML | Frozen allowed help levels per language |
 | Act retrieval | Lexical KB (`data/kb/`) | Context chunks for grounding |
 | Act LLM tool | Ollama (`llama3` default) | Constrained generation |
 | Mastery | BKT | Decide input |
@@ -284,7 +284,7 @@ In this section, we provide a performance evaluation of the proposed agentic fra
 
 #### 4.3.1 Metric Definitions
 
-***Scaffold Map Compliance Rate ($C$).*** Fraction of language–tier cells for which the engine’s authorize decision matches the Scaffold Map entry. Unit: dimensionless in $[0,1]$. Aggregate $C$ is the mean over all cells of all evaluated course maps.
+***Scaffold Map Compliance Rate ($C$).*** Fraction of (language, help-level) authorization cells for which the engine’s decide decision matches the Scaffold Map entry. Unit: dimensionless in $[0,1]$. Aggregate $C$ is the mean over all cells of all evaluated course maps.
 
 ***Clamp Correctness.*** Fraction of over-request cases (desired tier above the map maximum for a language) for which clamping returns the maximal feasible authorized tier (or correctly refuses when none exist).
 
@@ -302,7 +302,7 @@ In this section, we provide a performance evaluation of the proposed agentic fra
 
 #### 4.3.2 Experimental Result on Scaffold Map Compliance
 
-In the first set of experiments, we validate every (language, tier) cell across three course maps (`python_intro`, `linear_algebra`, `general_science`), each with five languages and four tiers, yielding $N=60$ cells. Consistency checks also verify that authorized tiers never exceed the per-language maximum and that clamp never returns a higher tier than allowed.
+In the first set of experiments, we validate every (language, help-level) authorization cell across three course maps (`python_intro`, `linear_algebra`, `general_science`), each with five languages and four help levels, yielding $N=60$ cells. Consistency checks also verify that authorized help levels never exceed the per-language maximum and that clamp never returns a higher level than allowed.
 
 **Table 5.** Effect of course configuration on Scaffold Map compliance.
 
