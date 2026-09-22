@@ -54,13 +54,13 @@ You should see **doctor: OK** with a short response from the model.
 
 ## Step 4: Run
 
-=== "Streamlit UI (student + teacher)"
+=== "Streamlit UI (student buddy)"
 
     ```bash
     streamlit run ui/app.py
     ```
-    
-    Opens at `http://localhost:8501`. Switch between Student and Teacher roles in the sidebar.
+
+    Opens at `http://localhost:8501`. Student-only buddy with Sources used from KB retrieval.
 
 === "CLI demo"
 

@@ -1,4 +1,8 @@
-"""Teacher escalation queue."""
+"""Research/debug audit log (replaces teacher escalation queue).
+
+Violations and adversarial turns are recorded for analysis. There is no
+teacher workflow — the agent self-regulates via Scaffold Map + Reflect.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,9 @@ from uuid import uuid4
 from tl_guard.models import EscalationItem
 
 
-class EscalationQueue:
+class AuditLog:
+    """In-memory audit trail of self-guardrail events."""
+
     def __init__(self) -> None:
         self._items: dict[str, EscalationItem] = {}
 
@@ -48,4 +54,9 @@ class EscalationQueue:
         return item
 
 
-ESCALATIONS = EscalationQueue()
+# Module-level singleton
+AUDIT_LOG = AuditLog()
+
+# Backward-compatible aliases
+EscalationQueue = AuditLog
+ESCALATIONS = AUDIT_LOG

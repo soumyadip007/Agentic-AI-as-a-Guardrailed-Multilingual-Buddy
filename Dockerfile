@@ -12,6 +12,7 @@ COPY src ./src
 COPY api ./api
 COPY ui ./ui
 COPY configs ./configs
+COPY data ./data
 COPY docs ./docs
 COPY mkdocs.yml ./
 

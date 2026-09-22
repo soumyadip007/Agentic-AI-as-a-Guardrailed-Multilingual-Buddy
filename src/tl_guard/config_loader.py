@@ -1,4 +1,4 @@
-"""Configuration loading for LSM and escalation policies."""
+"""Configuration loading for Scaffold Map (frozen pedagogical self-guardrails)."""
 
 from __future__ import annotations
 
@@ -16,12 +16,16 @@ CONFIGS_DIR = ROOT / "configs"
 
 
 class EscalationConfig(BaseModel):
-    on_adversarial_intent: str = "escalate"
-    on_leakage: str = "rewrite"
+    """Fixed response rules under the Scaffold Map (no teacher workflow)."""
+
+    on_adversarial_intent: str = "tighten"  # tighten | block | warn
+    on_leakage: str = "rewrite"  # rewrite | block
     on_policy_violation: str = "rewrite"
 
 
-class LSMConfig(BaseModel):
+class ScaffoldMapConfig(BaseModel):
+    """Frozen language×scaffold map and safety rules for a course."""
+
     course_id: str
     name: str
     description: str = ""
@@ -52,46 +56,87 @@ class LSMConfig(BaseModel):
         return bool(self.matrix.get(lang, {}).get(tier.value, False))
 
 
+# Backward-compatible aliases
+BuddyConstitutionConfig = ScaffoldMapConfig
+LSMConfig = ScaffoldMapConfig
+
+
 def load_yaml(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
-def load_lsm(course_id: str | None = None, path: Path | None = None) -> LSMConfig:
+def _scaffold_map_path(course_id: str) -> Path:
+    """Resolve Scaffold Map YAML, falling back to legacy filenames."""
+    for prefix in ("scaffold_map_", "constitution_", "lsm_"):
+        path = CONFIGS_DIR / f"{prefix}{course_id}.yaml"
+        if path.exists():
+            return path
+    raise FileNotFoundError(
+        f"Scaffold Map config not found for course '{course_id}' "
+        f"(tried scaffold_map_, constitution_, lsm_ prefixes)"
+    )
+
+
+def load_scaffold_map(course_id: str | None = None, path: Path | None = None) -> ScaffoldMapConfig:
     if path is None:
         if course_id is None:
             course_id = "python_intro"
-        mapping = {
-            "python_intro": "lsm_python_intro.yaml",
-            "linear_algebra": "lsm_linear_algebra.yaml",
-            "general_science": "lsm_general_science.yaml",
-        }
-        filename = mapping.get(course_id, f"lsm_{course_id}.yaml")
-        path = CONFIGS_DIR / filename
+        path = _scaffold_map_path(course_id)
     if not path.exists():
-        raise FileNotFoundError(f"LSM config not found: {path}")
+        raise FileNotFoundError(f"Scaffold Map config not found: {path}")
     data = load_yaml(path)
-    return LSMConfig.model_validate(data)
+    return ScaffoldMapConfig.model_validate(data)
+
+
+def load_constitution(course_id: str | None = None, path: Path | None = None) -> ScaffoldMapConfig:
+    """Backward-compatible alias."""
+    return load_scaffold_map(course_id=course_id, path=path)
+
+
+def load_lsm(course_id: str | None = None, path: Path | None = None) -> ScaffoldMapConfig:
+    """Backward-compatible alias."""
+    return load_scaffold_map(course_id=course_id, path=path)
 
 
 def list_courses() -> list[dict[str, str]]:
-    courses = []
-    for path in sorted(CONFIGS_DIR.glob("lsm_*.yaml")):
-        data = load_yaml(path)
-        courses.append(
-            {
-                "course_id": data.get("course_id", path.stem),
-                "name": data.get("name", path.stem),
-                "path": str(path),
-            }
-        )
+    courses: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for pattern in ("scaffold_map_*.yaml", "constitution_*.yaml", "lsm_*.yaml"):
+        for path in sorted(CONFIGS_DIR.glob(pattern)):
+            data = load_yaml(path)
+            stem = path.stem
+            for prefix in ("scaffold_map_", "constitution_", "lsm_"):
+                if stem.startswith(prefix):
+                    stem = stem[len(prefix) :]
+                    break
+            cid = data.get("course_id", stem)
+            if cid in seen:
+                continue
+            seen.add(cid)
+            courses.append(
+                {
+                    "course_id": cid,
+                    "name": data.get("name", cid),
+                    "path": str(path),
+                }
+            )
     return courses
 
 
-def save_lsm(config: LSMConfig, path: Path | None = None) -> Path:
+def save_scaffold_map(config: ScaffoldMapConfig, path: Path | None = None) -> Path:
+    """Persist Scaffold Map to disk (research/dev only — not exposed in product UI)."""
     if path is None:
-        path = CONFIGS_DIR / f"lsm_{config.course_id}.yaml"
+        path = CONFIGS_DIR / f"scaffold_map_{config.course_id}.yaml"
     payload = config.model_dump(mode="json")
     with path.open("w", encoding="utf-8") as f:
         yaml.safe_dump(payload, f, sort_keys=False, allow_unicode=True)
     return path
+
+
+def save_constitution(config: ScaffoldMapConfig, path: Path | None = None) -> Path:
+    return save_scaffold_map(config, path=path)
+
+
+def save_lsm(config: ScaffoldMapConfig, path: Path | None = None) -> Path:
+    return save_scaffold_map(config, path=path)

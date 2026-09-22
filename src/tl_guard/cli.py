@@ -1,4 +1,4 @@
-"""CLI for TL-Guard demos and LSM preview."""
+"""CLI for TL-Guard demos and Scaffold Map preview."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from tl_guard.agent import TLGuardAgent
-from tl_guard.config_loader import list_courses, load_lsm
+from tl_guard.config_loader import list_courses, load_scaffold_map
 from tl_guard.decide.lsm_engine import LSMEngine
 from tl_guard.models import ScaffoldTier
 
@@ -21,7 +21,7 @@ console = Console()
 
 @app.command("courses")
 def courses_cmd() -> None:
-    """List available LSM course policies."""
+    """List available courses (Scaffold Maps)."""
     table = Table(title="Courses")
     table.add_column("course_id")
     table.add_column("name")
@@ -37,25 +37,25 @@ def preview(
     course_id: str = typer.Option("python_intro"),
     tier: Optional[str] = typer.Option(None, help="Desired tier T1-T4"),
 ) -> None:
-    """Preview what the LSM authorizes for a language/mastery."""
+    """Preview what the Scaffold Map authorizes for a language/mastery."""
     from tl_guard.decide.scaffold_selector import select_scaffold_tier
     from tl_guard.models import LanguageIntent
 
-    lsm = load_lsm(course_id)
-    engine = LSMEngine(lsm)
+    cfg = load_scaffold_map(course_id)
+    engine = LSMEngine(cfg)
     desired = ScaffoldTier(tier) if tier else select_scaffold_tier(
         engine, language=language, mastery=mastery, intent=LanguageIntent.NEUTRAL
     )
     max_t = engine.max_tier(language)
     console.print(
         Panel(
-            f"Course: {lsm.name}\n"
+            f"Course: {cfg.name}\n"
             f"Language: {language}\n"
             f"Mastery: {mastery}\n"
             f"Max authorized: {max_t.value}\n"
             f"Selected tier: {desired.value}\n"
             f"Authorized: {engine.authorize(language, desired)}",
-            title="LSM Preview",
+            title="Scaffold Map Preview",
         )
     )
 
@@ -66,7 +66,7 @@ def chat(
     concept: str = typer.Option("variables"),
 ) -> None:
     """Interactive multilingual tutoring session (Ollama by default)."""
-    agent = TLGuardAgent(lsm=load_lsm(course_id))
+    agent = TLGuardAgent(scaffold_map=load_scaffold_map(course_id))
     session = agent.create_session(concept=concept)
     console.print(
         Panel(
@@ -82,6 +82,8 @@ def chat(
         if msg.lower() in {"/quit", "/exit", "quit", "exit"}:
             break
         turn = agent.handle_turn(session.session_id, msg)
+        sources = (turn.metadata or {}).get("context_sources") or []
+        src_note = f" sources={len(sources)}" if sources else ""
         console.print(
             Panel(
                 turn.assistant_message,
@@ -90,7 +92,7 @@ def chat(
                     f"tier={turn.authorized_tier.value} "
                     f"intent={turn.intent.value} "
                     f"outcome={turn.outcome.value} "
-                    f"mastery={turn.mastery:.2f}"
+                    f"mastery={turn.mastery:.2f}{src_note}"
                 ),
             )
         )
@@ -104,17 +106,21 @@ def doctor() -> None:
 
     get_settings.cache_clear()
     cfg = get_settings()
-    console.print(Panel(
-        f"provider={cfg.provider}\nmodel={cfg.model_name}\n"
-        f"ollama_url={cfg.tl_guard_ollama_base_url}",
-        title="TL-Guard LLM config",
-    ))
+    console.print(
+        Panel(
+            f"provider={cfg.provider}\nmodel={cfg.model_name}\n"
+            f"ollama_url={cfg.tl_guard_ollama_base_url}",
+            title="TL-Guard LLM config",
+        )
+    )
     try:
         llm = get_llm(cfg)
         if isinstance(llm, OllamaLLM):
             tags = llm.ping()
             names = [m.get("name", "") for m in tags.get("models", [])]
-            console.print(f"[green]Ollama reachable.[/] Models: {', '.join(names) or '(none)'}")
+            console.print(
+                f"[green]Ollama reachable.[/] Models: {', '.join(names) or '(none)'}"
+            )
             if cfg.tl_guard_model not in names and f"{cfg.tl_guard_model}:latest" not in names:
                 console.print(
                     f"[yellow]Model '{cfg.tl_guard_model}' not listed. "
@@ -134,7 +140,7 @@ def doctor() -> None:
 @app.command("demo")
 def demo(course_id: str = "python_intro") -> None:
     """Run a scripted English→Hindi translanguaging demo (uses Ollama by default)."""
-    agent = TLGuardAgent(lsm=load_lsm(course_id))
+    agent = TLGuardAgent(scaffold_map=load_scaffold_map(course_id))
     session = agent.create_session(concept="loops")
     script = [
         "How do I write a for loop over a list in Python?",

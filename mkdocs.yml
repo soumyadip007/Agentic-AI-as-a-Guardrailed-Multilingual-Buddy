@@ -1,5 +1,5 @@
 site_name: TL-Guard Docs
-site_description: Guardrailed multilingual tutoring agent — complete workflow and developer guide
+site_description: Agentic multilingual buddy — Scaffold Map + context-grounded Act
 site_url: https://localhost:8001/
 repo_name: Agentic-AI-as-a-Guardrailed-Multilingual-Buddy
 repo_url: https://github.com/souchowdhury1997/Agentic-AI-as-a-Guardrailed-Multilingual-Buddy
@@ -69,11 +69,11 @@ nav:
   - Guides:
       - Complete workflow: workflow.md
       - Student guide: student-guide.md
-      - Teacher guide: teacher-guide.md
+      - Research audit log: teacher-guide.md
   - Architecture:
       - Overview: architecture.md
       - Operationalizing translanguaging: operationalization.md
-      - Configuration (LSM): configuration.md
+      - Scaffold Map & knowledge base: configuration.md
   - Reference:
       - CLI: cli.md
       - HTTP API: api.md

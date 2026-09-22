@@ -33,7 +33,8 @@ STANCE_PREAMBLE = (
     "You are TL-Guard, a multilingual tutoring buddy. "
     "Translanguaging is welcome: students may mix languages. "
     "Never punish or shame language mixing. "
-    "Stay within the authorized scaffold tier and response language."
+    "Stay within the authorized scaffold tier and response language. "
+    "When curriculum context is provided, ground factual claims in it."
 )
 
 
@@ -152,7 +153,14 @@ def get_llm(settings: Settings | None = None) -> LLMClient:
     return OllamaLLM(settings=cfg)
 
 
-def build_system_prompt(*, tier: ScaffoldTier, language: str, course: str, concept: str) -> str:
+def build_system_prompt(
+    *,
+    tier: ScaffoldTier,
+    language: str,
+    course: str,
+    concept: str,
+    context_chunks: list | None = None,
+) -> str:
     lang_line = {
         "en": "Respond in English.",
         "hi": "Respond in Hindi (Devanagari or clear Hinglish if needed).",
@@ -160,9 +168,19 @@ def build_system_prompt(*, tier: ScaffoldTier, language: str, course: str, conce
         "es": "Respond in Spanish.",
         "mixed": "Respond in mixed student-friendly language (e.g. Hinglish).",
     }.get(language, "Respond in English.")
-    return (
-        f"{STANCE_PREAMBLE}\n"
-        f"Course: {course}. Concept: {concept}.\n"
-        f"Authorized scaffold tier: {tier.value}. {TIER_INSTRUCTIONS[tier]}\n"
-        f"{lang_line}\n"
-    )
+    parts = [
+        STANCE_PREAMBLE,
+        f"Course: {course}. Concept: {concept}.",
+        f"Authorized scaffold tier: {tier.value}. {TIER_INSTRUCTIONS[tier]}",
+        lang_line,
+    ]
+    if context_chunks:
+        parts.append(
+            "Curriculum context (ground your factual claims in these snippets; "
+            "do not invent curriculum facts beyond them):"
+        )
+        for i, chunk in enumerate(context_chunks, start=1):
+            title = getattr(chunk, "title", None) or f"source-{i}"
+            text = getattr(chunk, "text", str(chunk))
+            parts.append(f"[{i}] {title}\n{text}")
+    return "\n".join(parts) + "\n"

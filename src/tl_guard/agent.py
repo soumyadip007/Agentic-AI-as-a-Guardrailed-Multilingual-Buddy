@@ -1,8 +1,8 @@
 """TL-Guard agent: Perceive → Decide → Act → Reflect → Remember.
 
-TLGuardAgent is the product. Pedagogical safety is not a wrapper around a chatbot;
-it is built into Decide (LSM + disclosure), Act (constrained LLM), and Reflect
-(post-check + escalation). The LLM is only a tool used inside Act.
+TLGuardAgent is a student-facing multilingual buddy. Pedagogical safety is built
+into Decide (Scaffold Map + disclosure), Act (context retrieve + constrained
+LLM), and Reflect (post-check + audit). The LLM is only a tool used inside Act.
 """
 
 from __future__ import annotations
@@ -10,17 +10,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tl_guard.act.llm_executor import get_llm
-from tl_guard.config_loader import LSMConfig, load_lsm
+from tl_guard.act.retriever import KnowledgeRetriever
+from tl_guard.config_loader import ScaffoldMapConfig, load_scaffold_map
 from tl_guard.decide.disclosure_checker import check_disclosure
 from tl_guard.decide.language_selector import select_response_language
-from tl_guard.decide.lsm_engine import LSMEngine
+from tl_guard.decide.scaffold_map import ScaffoldMap
 from tl_guard.decide.scaffold_selector import select_scaffold_tier
 from tl_guard.models import GenerationPlan, LanguageIntent, PolicyOutcome, TurnRecord
 from tl_guard.perceive.intent_classifier import classify_intent, similar_question
 from tl_guard.perceive.language_detector import detect_language
 from tl_guard.perceive.session_state import STORE, SessionState, SessionStore
 from tl_guard.pipeline.turn_pipeline import execute_act_reflect
-from tl_guard.reflect.escalation import ESCALATIONS
+from tl_guard.reflect.escalation import AUDIT_LOG
 from tl_guard.remember.session_updater import update_session
 
 if TYPE_CHECKING:
@@ -28,21 +29,28 @@ if TYPE_CHECKING:
 
 
 class TLGuardAgent:
-    """Goal-driven multilingual tutoring agent with pedagogical guardrails."""
+    """Goal-driven multilingual tutoring agent with built-in self-guardrails."""
 
     def __init__(
         self,
-        lsm: LSMConfig | None = None,
+        scaffold_map: ScaffoldMapConfig | None = None,
+        constitution: ScaffoldMapConfig | None = None,  # backward-compat
+        lsm: ScaffoldMapConfig | None = None,  # backward-compat
         store: SessionStore | None = None,
         llm: LLMClient | None = None,
+        retriever: KnowledgeRetriever | None = None,
     ) -> None:
-        self.lsm = lsm or load_lsm("python_intro")
-        self.engine = LSMEngine(self.lsm)
+        cfg = scaffold_map or constitution or lsm or load_scaffold_map("python_intro")
+        self.scaffold_map = ScaffoldMap(cfg)
+        self.constitution = self.scaffold_map  # alias
+        self.lsm = cfg  # alias for older call sites
+        self.engine = self.scaffold_map.engine
         self.store = store or STORE
         self.llm = llm if llm is not None else get_llm()
+        self.retriever = retriever if retriever is not None else KnowledgeRetriever()
 
     def create_session(self, concept: str = "variables") -> SessionState:
-        return self.store.create(course_id=self.lsm.course_id, concept=concept)
+        return self.store.create(course_id=self.scaffold_map.course_id, concept=concept)
 
     def handle_turn(self, session_id: str, student_message: str) -> TurnRecord:
         """One full agent loop over a student message."""
@@ -71,15 +79,15 @@ class TLGuardAgent:
         correct = tracker.infer_correctness(student_message)
         mastery = tracker.update(correct)
 
-        # --- Decide ---
+        # --- Decide (Scaffold Map) ---
+        esc = self.scaffold_map.escalation
         tighten = intent_result.intent == LanguageIntent.ADVERSARIAL
-        if tighten and self.lsm.escalation.on_adversarial_intent == "tighten":
+        if tighten and esc.on_adversarial_intent in {"tighten", "warn"}:
             tighten = True
 
-        desired_lang_for_policy = lang
         tier = select_scaffold_tier(
             self.engine,
-            language=desired_lang_for_policy,
+            language=lang,
             mastery=mastery,
             intent=intent_result.intent,
             tighten=tighten,
@@ -88,7 +96,7 @@ class TLGuardAgent:
             self.engine,
             student_language=lang,
             scaffold_tier=tier,
-            default_language=self.lsm.default_language,
+            default_language=self.scaffold_map.default_language,
         )
         disclosure = check_disclosure(
             self.engine, language=response_language, tier=tier
@@ -102,14 +110,9 @@ class TLGuardAgent:
             tighten=tighten,
         )
 
-        # Adversarial with escalate policy → authorize T1 but escalate after
-        force_escalate = (
-            intent_result.intent == LanguageIntent.ADVERSARIAL
-            and self.lsm.escalation.on_adversarial_intent == "escalate"
-        )
         if (
             intent_result.intent == LanguageIntent.ADVERSARIAL
-            and self.lsm.escalation.on_adversarial_intent == "block"
+            and esc.on_adversarial_intent == "block"
         ):
             plan.authorized = False
             plan.reason = "blocked due to adversarial language-switch intent"
@@ -120,51 +123,52 @@ class TLGuardAgent:
             for t in state.turns
         )
 
-        # --- Act + Reflect ---
+        # --- Act + Reflect (context-grounded) ---
         result = execute_act_reflect(
             llm=self.llm,
             plan=plan,
             student_message=student_message,
-            course=self.lsm.name,
+            course=self.scaffold_map.name,
             concept=state.concept,
+            course_id=self.scaffold_map.course_id,
             prior_withheld=prior_withheld,
-            on_leakage=self.lsm.escalation.on_leakage,
-            on_policy_violation=self.lsm.escalation.on_policy_violation,
+            on_leakage=esc.on_leakage if esc.on_leakage in {"rewrite", "block"} else "rewrite",
+            on_policy_violation=esc.on_policy_violation
+            if esc.on_policy_violation in {"rewrite", "block"}
+            else "rewrite",
+            retriever=self.retriever,
         )
 
         outcome = result.outcome
         notes = list(intent_result.reasons) + list(result.post_check.reasons)
-        if force_escalate and outcome != PolicyOutcome.BLOCK:
-            outcome = PolicyOutcome.ESCALATE
-            notes.append("adversarial intent → teacher escalation")
-            ESCALATIONS.add(
+        if result.context_chunks:
+            notes.append(f"context_chunks={len(result.context_chunks)}")
+
+        if intent_result.intent == LanguageIntent.ADVERSARIAL or outcome in {
+            PolicyOutcome.ESCALATE,
+            PolicyOutcome.BLOCK,
+        }:
+            AUDIT_LOG.add(
                 session_id=session_id,
                 turn_index=len(state.turns),
-                reason="; ".join(notes),
+                reason="; ".join(notes) or "self-guardrail event",
                 student_message=student_message,
                 draft_response=result.raw_llm_text or result.text,
-                recommended_action="review and confirm scaffold tier",
+                recommended_action="audit only — agent already self-regulated",
             )
-        elif outcome == PolicyOutcome.ESCALATE:
-            ESCALATIONS.add(
-                session_id=session_id,
-                turn_index=len(state.turns),
-                reason="; ".join(result.post_check.reasons) or "post-check escalate",
-                student_message=student_message,
-                draft_response=result.raw_llm_text or result.text,
-                recommended_action="rewrite or approve",
-            )
+            if outcome == PolicyOutcome.ESCALATE:
+                outcome = PolicyOutcome.REWRITE
+                notes.append("escalation demoted to rewrite (no teacher workflow)")
 
         if state.consecutive_rewrites >= 2 and outcome == PolicyOutcome.REWRITE:
-            outcome = PolicyOutcome.ESCALATE
-            notes.append("auto-escalate after consecutive rewrites")
-            ESCALATIONS.add(
+            notes.append("consecutive rewrites — audited")
+            AUDIT_LOG.add(
                 session_id=session_id,
                 turn_index=len(state.turns),
                 reason="consecutive rewrites",
                 student_message=student_message,
                 draft_response=result.text,
-                recommended_action="teacher review",
+                recommended_action="audit only",
             )
 
         turn = TurnRecord(
@@ -184,9 +188,12 @@ class TLGuardAgent:
                 "code_mixed": detection.is_code_mixed,
                 "intent_confidence": intent_result.confidence,
                 "leakage_score": result.post_check.leakage_score,
+                "context_sources": [
+                    {"source_id": c.source_id, "title": c.title, "score": c.score}
+                    for c in result.context_chunks
+                ],
             },
         )
 
-        # --- Remember ---
         update_session(self.store, state, turn)
         return turn

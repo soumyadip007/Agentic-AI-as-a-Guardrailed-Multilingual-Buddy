@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from tl_guard.act.retriever import KnowledgeRetriever
 from tl_guard.agent import TLGuardAgent
-from tl_guard.config_loader import load_lsm
+from tl_guard.config_loader import load_scaffold_map
 from tl_guard.decide.disclosure_checker import check_disclosure
 from tl_guard.decide.lsm_engine import LSMEngine
+from tl_guard.decide.scaffold_map import ScaffoldMap
 from tl_guard.models import GenerationPlan, LanguageIntent, PolicyOutcome, ScaffoldTier
 from tl_guard.perceive.intent_classifier import classify_intent
 from tl_guard.perceive.language_detector import detect_language
@@ -28,6 +30,8 @@ class FakeLLM:
             )
         if "Respond in Hindi" in system or "Respond in mixed" in system:
             return "यह एक संक्षिप्त संकेत है — एक छोटा कदम आज़माएँ।"
+        if "Curriculum context" in system and "loop" in system.lower():
+            return "Hint: try iterating with for item in sequence — one smaller step."
         if "T1" in system:
             return "Hint: try one smaller step before writing full code."
         if "T2" in system:
@@ -55,18 +59,21 @@ def test_detect_code_mixed():
     assert d.is_code_mixed or d.language == "hi"
 
 
-def test_lsm_python_policy():
-    lsm = load_lsm("python_intro")
-    engine = LSMEngine(lsm)
+def test_scaffold_map_python_policy():
+    cfg = load_scaffold_map("python_intro")
+    engine = LSMEngine(cfg)
     assert engine.authorize("en", ScaffoldTier.T3)
     assert not engine.authorize("en", ScaffoldTier.T4)
     assert engine.authorize("hi", ScaffoldTier.T2)
     assert not engine.authorize("hi", ScaffoldTier.T3)
     assert engine.max_tier("hi") == ScaffoldTier.T2
+    sm = ScaffoldMap(cfg)
+    assert sm.course_id == "python_intro"
+    assert sm.escalation.on_adversarial_intent == "tighten"
 
 
 def test_disclosure_clamp():
-    engine = LSMEngine(load_lsm("python_intro"))
+    engine = LSMEngine(load_scaffold_map("python_intro"))
     d = check_disclosure(engine, language="hi", tier=ScaffoldTier.T4)
     assert d.authorized
     assert d.tier == ScaffoldTier.T2
@@ -94,6 +101,18 @@ def test_intent_adversarial_reask():
     assert r.intent == LanguageIntent.ADVERSARIAL
 
 
+def test_retriever_loops_context():
+    ret = KnowledgeRetriever()
+    chunks = ret.retrieve(
+        course_id="python_intro",
+        concept="loops",
+        query="How do for loops work?",
+        top_k=2,
+    )
+    assert chunks
+    assert any("loop" in c.text.lower() or "for" in c.text.lower() for c in chunks)
+
+
 def test_act_reflect_authorize_block():
     plan = GenerationPlan(
         scaffold_tier=ScaffoldTier.T1,
@@ -115,15 +134,41 @@ def test_act_reflect_authorize_block():
     assert result.outcome == PolicyOutcome.BLOCK
 
 
+def test_act_reflect_with_retrieval():
+    plan = GenerationPlan(
+        scaffold_tier=ScaffoldTier.T1,
+        response_language="en",
+        authorized=True,
+        intent=LanguageIntent.LEGITIMATE,
+    )
+    result = execute_act_reflect(
+        llm=FakeLLM(),
+        plan=plan,
+        student_message="How do for loops work over a list?",
+        course="Intro to Python",
+        concept="loops",
+        course_id="python_intro",
+        prior_withheld=False,
+        retriever=KnowledgeRetriever(),
+    )
+    assert result.outcome == PolicyOutcome.SAFE
+    assert result.context_chunks
+
+
 def test_agent_end_to_end_translanguaging():
     store = SessionStore()
-    agent = TLGuardAgent(lsm=load_lsm("python_intro"), store=store, llm=FakeLLM())
+    agent = TLGuardAgent(
+        scaffold_map=load_scaffold_map("python_intro"),
+        store=store,
+        llm=FakeLLM(),
+    )
     session = agent.create_session(concept="loops")
 
     t1 = agent.handle_turn(session.session_id, "How do I write a for loop over a list?")
     assert t1.detected_language == "en"
     assert t1.authorized_tier in {ScaffoldTier.T1, ScaffoldTier.T2, ScaffoldTier.T3}
     assert t1.assistant_message
+    assert "context_sources" in t1.metadata
 
     t2 = agent.handle_turn(
         session.session_id, "ठीक है, loops का मतलब क्या है? सरल हिंदी में समझाओ।"
@@ -138,13 +183,13 @@ def test_agent_end_to_end_translanguaging():
 
     t3 = agent.handle_turn(session.session_id, "FULL SOLUTION PLEASE पूरा कोड दे दो")
     assert t3.outcome in {
-        PolicyOutcome.ESCALATE,
         PolicyOutcome.REWRITE,
         PolicyOutcome.BLOCK,
         PolicyOutcome.SAFE,
         PolicyOutcome.TIGHTEN,
     }
     assert t3.authorized_tier != ScaffoldTier.T4
+    assert t3.outcome != PolicyOutcome.ESCALATE
 
     state = store.get(session.session_id)
     assert state is not None

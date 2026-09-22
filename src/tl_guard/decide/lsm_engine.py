@@ -1,13 +1,15 @@
-"""Language-Scaffold Matrix policy engine."""
+"""Scaffold Map authorization engine (language × scaffold tier)."""
 
 from __future__ import annotations
 
-from tl_guard.config_loader import LSMConfig
+from tl_guard.config_loader import ScaffoldMapConfig
 from tl_guard.models import ScaffoldTier, TIER_ORDER, TIER_RANK
 
 
 class LSMEngine:
-    def __init__(self, config: LSMConfig) -> None:
+    """Clamp/authorize scaffold tiers per language under a frozen Scaffold Map."""
+
+    def __init__(self, config: ScaffoldMapConfig) -> None:
         self.config = config
 
     def max_tier(self, language: str) -> ScaffoldTier:

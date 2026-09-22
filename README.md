@@ -1,12 +1,14 @@
 # TL-Guard
 
-**Agentic AI as a Guardrailed Multilingual Buddy: Translanguaging Support Under Pedagogical Safety Constraints**
+**Agentic multilingual buddy with fixed self-guardrails and context-grounded Act.**
 
-TL-Guard is an **agent**, not a chatbot wrapper. Safety lives inside the agent loop:
+TL-Guard is an **agent**, not a chatbot wrapper and not a teacher policy harness. Safety lives inside:
 
 **Perceive → Decide → Act → Reflect → Remember**
 
-The LLM (Ollama) is only a tool used inside **Act**. Teachers configure a **Language–Scaffold Matrix (LSM)** so students can translanguage safely without unrestricted answer leakage.
+- **Decide** uses a frozen **Scaffold Map** (language × scaffold matrix).
+- **Act** retrieves local curriculum snippets, then calls the LLM (Ollama) as a tool.
+- **Reflect** rewrites or blocks unsafe drafts; events go to a research audit log (no teacher console).
 
 ## Documentation (MkDocs)
 
@@ -15,19 +17,17 @@ pip install -e ".[docs]"
 mkdocs serve -a 127.0.0.1:8001
 ```
 
-Open **http://127.0.0.1:8001** for the full workflow, Ollama setup, student/teacher guides, API, architecture, and deployment.
-
-Build static site: `mkdocs build` → `site/`.
+Open **http://127.0.0.1:8001**.
 
 ## Features
 
 - Multilingual + code-mixed language detection (en / hi / bn / es / mixed)
 - Intent classification (legitimate translanguaging vs adversarial switching)
-- LSM policy engine + disclosure contracts (Decide)
-- Agent Act + Reflect: authorize → constrained LLM → post-check
-- **Ollama by default** (no mock LLM); optional OpenAI
-- Cross-lingual leakage rewrite + teacher escalation queue
-- Student + Teacher Streamlit UI and FastAPI
+- Frozen Scaffold Map + disclosure contracts (Decide)
+- Context-grounded Act: lexical retrieve from `data/kb/` → constrained LLM
+- Reflect: leakage / over-scaffold rewrite or block
+- Student-only Streamlit buddy + FastAPI
+- Ollama by default; optional OpenAI
 
 ## Quick start (local)
 
@@ -36,7 +36,6 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,docs]"
 cp .env.example .env
 
-# Ollama must be running with a model (e.g. llama3)
 ollama pull llama3
 tl-guard doctor
 
@@ -47,8 +46,6 @@ mkdocs serve -a 127.0.0.1:8001
 ```
 
 ## Deploy with Docker Compose
-
-Requires Docker and a running Ollama on the host (`http://host.docker.internal:11434`):
 
 ```bash
 cp .env.example .env
@@ -61,19 +58,17 @@ docker compose up --build
 
 See [docs/deployment.md](docs/deployment.md).
 
-Optional OpenAI: set `TL_GUARD_LLM=openai` and `OPENAI_API_KEY`.
-
 ## Layout
 
 ```
 src/tl_guard/   TLGuardAgent (Perceive→Decide→Act→Reflect→Remember)
 api/            FastAPI
-ui/             Streamlit
-configs/        LSM YAML
+ui/             Streamlit student buddy
+configs/        scaffold_map_*.yaml (frozen)
+data/kb/        Curriculum markdown for Act retrieval
 docs/           MkDocs sources
 docker-compose.yml
-Dockerfile
-plan.md         Development plan
+plan.md
 ```
 
 ## Tests
@@ -82,6 +77,6 @@ plan.md         Development plan
 pytest -q
 ```
 
-## License
+## Relation to EduHarness
 
-See `LICENSE`.
+Independent codebase. Shared research ideas may inform design; **no** code or runtime dependency on EduHarness. Novelty is agentic self-guardrailing + translanguaging + context-grounded Act — not a teacher LSM harness.

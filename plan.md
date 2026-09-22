@@ -1,21 +1,21 @@
 # Development Plan: TL-Guard
 
-**Agentic AI as a Guardrailed Multilingual Buddy: Translanguaging Support Under Pedagogical Safety Constraints**
+**Agentic AI as a Guardrailed Multilingual Buddy: Self-Regulated Translanguaging with Context-Grounded Act**
 
 **Created:** September 2026
-**Last Updated:** September 21, 2026
-**Status:** MVP implemented (independent agent + API + UI; research evaluation phases still open)
-**Project stance:** Independent codebase — TL-Guard is a **first-class agentic tutoring system**, not an EduHarness extension and not a harness wrapping a chatbot. Shared research ideas (disclosure control, pedagogical safety) may inform design, but there is no code, package, or runtime dependency on EduHarness.
+**Last Updated:** September 22, 2026
+**Status:** MVP reframed — student buddy + Scaffold Map + context-grounded Act (research evaluation phases still open)
+**Project stance:** Independent codebase — TL-Guard is a **first-class agentic tutoring buddy**, not an EduHarness extension and not a teacher-policy harness wrapping a chatbot. Shared research ideas (disclosure control, pedagogical safety) may inform design, but there is no code, package, or runtime dependency on EduHarness.
 
 ---
 
 ## 1. Project Summary
 
-TL-Guard is an agentic AI tutoring architecture that supports multilingual learners through safe, controlled translanguaging. Unlike existing multilingual chatbots that respond in any language without pedagogical awareness, TL-Guard operates as a goal-driven agent with a closed decision loop: **Perceive → Decide → Act → Reflect → Remember**. Teachers configure safety policies via a Language-Scaffold Matrix (LSM), and the system distinguishes legitimate translanguaging from adversarial language-switching in real time.
+TL-Guard is an agentic AI tutoring architecture that supports multilingual learners through safe, controlled translanguaging. Unlike existing multilingual chatbots (with or without RAG) that respond without deliberative safety, TL-Guard operates as a goal-driven agent with a closed decision loop: **Perceive → Decide → Act → Reflect → Remember**. A frozen **Scaffold Map** self-regulates scaffold/language disclosure; **Act** retrieves local curriculum context before calling the LLM. The system distinguishes legitimate translanguaging from adversarial language-switching in real time.
 
-**Core tension this resolves:** Safety systems treat code-switching as suspicious. Translanguaging pedagogy treats it as essential. TL-Guard resolves this by being *language-tolerant but pedagogically strict*.
+**Core tension this resolves:** Safety systems treat code-switching as suspicious. Translanguaging pedagogy treats it as essential. TL-Guard resolves this by being *language-tolerant but pedagogically strict* — without a teacher LSM console as the product novelty.
 
-**Product surface:** A self-contained tutoring product with (1) the TL-Guard agent (Perceive→Decide→Act→Reflect→Remember), (2) a student chat UI for multilingual tutoring, and (3) a teacher UI for LSM configuration and escalation review.
+**Product surface:** A self-contained tutoring product with (1) the TL-Guard agent (Perceive→Decide→Act→Reflect→Remember), (2) a student chat UI with Sources used, and (3) read-only Scaffold Map + research audit log (no teacher editor).
 ---
 
 ## 2. Research Objectives
@@ -23,8 +23,8 @@ TL-Guard is an agentic AI tutoring architecture that supports multilingual learn
 | ID | Objective |
 |----|-----------|
 | RO1 | Operationalize García's translanguaging framework (Stance/Design/Shifts) as computational design principles for AI tutoring agents |
-| RO2 | Design and implement TL-Guard — a pedagogical safety architecture supporting translanguaging while preventing leakage, misconception reinforcement, and scaffolding collapse |
-| RO3 | Define and validate multilingual pedagogical policy constructs (Language-Scaffold Matrix, translanguaging-aware disclosure contracts) that teachers can configure |
+| RO2 | Design and implement TL-Guard — a self-guardrailed agentic buddy preventing leakage and scaffolding collapse under translanguaging |
+| RO3 | Define and validate multilingual pedagogical policy constructs (Scaffold Map, context-grounded Act, translanguaging-aware disclosure contracts) as fixed research artifacts |
 | RO4 | Evaluate whether TL-Guard improves learning outcomes for multilingual learners vs. English-only, unguardrailed multilingual, and safety-guardrailed English-only baselines |
 
 ---

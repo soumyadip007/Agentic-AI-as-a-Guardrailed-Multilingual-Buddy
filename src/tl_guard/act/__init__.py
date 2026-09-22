@@ -8,9 +8,12 @@ from tl_guard.act.llm_executor import (
     get_llm,
 )
 from tl_guard.act.refusal_generator import generate_refusal
+from tl_guard.act.retriever import ContextChunk, KnowledgeRetriever
 from tl_guard.act.rewriter import looks_like_full_solution, rewrite_to_tier
 
 __all__ = [
+    "ContextChunk",
+    "KnowledgeRetriever",
     "LLMError",
     "OllamaLLM",
     "OpenAILLM",

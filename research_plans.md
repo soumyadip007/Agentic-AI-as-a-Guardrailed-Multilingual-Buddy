@@ -2,7 +2,7 @@
 
 **Prepared:** September 2026  
 **Supervisor review:** Pending  
-**Connection to broader research:** Both papers extend the EduHarness pedagogical-harness paradigm into the multilingual dimension, addressing distinct but complementary research questions.
+**Connection to broader research:** Topic 1 explores harness-oriented XL-CRA risk. Topic 2 (this repo) is an **independent agentic buddy** — not an EduHarness extension. Shared safety themes may inform both; Paper 2 novelty is self-guardrailed translanguaging + context-grounded Act.
 
 ---
 
@@ -18,21 +18,21 @@ AI tutors are increasingly used by multilingual students, but current safety che
 
 ### Topic 2 — Simple Abstract
 
-**Title:** Agentic AI as a Guardrailed Multilingual Buddy: Translanguaging Support Under Pedagogical Safety Constraints
+**Title:** Agentic AI as a Guardrailed Multilingual Buddy: Self-Regulated Translanguaging with Context-Grounded Act
 
-Many students learn better when they can mix languages (translanguaging), and recent work shows AI can act as a “multilingual buddy.” But today’s tools are mostly chatbots: they reply in any language without deciding *how much help* to give, *in which language*, or *whether that help is pedagogically safe*. We propose TL-Guard — an **agentic** AI buddy. Unlike a chatbot that only generates text, our agent **perceives** the student’s language and mastery, **decides** the right scaffold (hint vs explanation vs solution), **checks** teacher-defined safety rules, **acts** (respond, rewrite, or withhold), and **escalates** to a teacher when needed — while still supporting legitimate language mixing. Teachers configure which help levels are allowed in which languages. The contribution is a safe, goal-driven multilingual tutoring agent grounded in translanguaging theory, not just a multilingual chat interface.
+Many students learn better when they can mix languages (translanguaging), and recent work shows AI can act as a “multilingual buddy.” But today’s tools are mostly chatbots (sometimes with RAG): they reply in any language without deciding *how much help* to give, *in which language*, or *whether that help is pedagogically safe* inside a deliberative loop. We propose TL-Guard — an **agentic** AI buddy. Unlike a chatbot that only generates text, our agent **perceives** the student’s language and mastery, **decides** the right scaffold under a fixed **Scaffold Map**, **acts** by retrieving curriculum context then calling the LLM, **reflects** (rewrite/block), and **remembers** session state — while still supporting legitimate language mixing. There is no teacher policy console as the product novelty. The contribution is a safe, goal-driven multilingual tutoring agent grounded in translanguaging theory, not just a multilingual chat interface.
 
 ### Topic 2 — What “Agentic” Means Here (for email / discussion)
 
 In this topic, **agentic** does **not** mean a free multi-agent swarm. It means the AI is a **goal-driven tutoring agent** with a closed decision loop, not a passive LLM chatbot:
 
 1. **Perceive** — Detect language(s) used, student mastery (BKT), and whether the switch looks like learning help or answer-seeking.
-2. **Decide** — Choose scaffold tier and response language using the Language–Scaffold Matrix (teacher policy).
-3. **Act** — Deliver a hint / explanation / rewrite / block under pedagogical constraints.
-4. **Reflect / escalate** — Post-check for leakage across languages; if unsafe, escalate to the teacher queue.
-5. **Remember** — Carry learner state and policy across turns (session memory), so each reply depends on history, not only the last message.
+2. **Decide** — Choose scaffold tier and response language using the frozen Scaffold Map.
+3. **Act** — Retrieve curriculum snippets, then deliver a hint / explanation / rewrite / block under pedagogical constraints.
+4. **Reflect** — Post-check for leakage across languages; rewrite or block (research audit log only — no teacher queue).
+5. **Remember** — Carry learner state across turns (session memory), so each reply depends on history, not only the last message.
 
-So the novelty is: **agentic tutoring behaviour + translanguaging support + pedagogical guardrails inside the agent loop**, together. Existing “multilingual buddy” work (e.g. KiKo-Prim) uses ChatGPT as a helper but without this agent loop or formal safety policy.
+So the novelty is: **agentic tutoring behaviour + translanguaging support + fixed self-guardrails + context-grounded Act**, together. Existing “multilingual buddy” work (e.g. KiKo-Prim) uses ChatGPT as a helper but without this agent loop or formal Scaffold Map.
 
 ---
 
@@ -336,23 +336,21 @@ Key architectural contributions:
 
 # PAPER 2
 
-## Agentic AI as a Guardrailed Multilingual Buddy: Translanguaging Support Under Pedagogical Safety Constraints
+## Agentic AI as a Guardrailed Multilingual Buddy: Self-Regulated Translanguaging with Context-Grounded Act
 
 ### Simple Abstract (email version)
 
-Many students learn better when they can mix languages (translanguaging), and recent work shows AI can act as a “multilingual buddy.” But today’s tools are mostly chatbots: they reply in any language without deciding *how much help* to give, *in which language*, or *whether that help is pedagogically safe*. We propose TL-Guard — an **agentic** AI buddy. Unlike a chatbot that only generates text, our agent **perceives** the student’s language and mastery, **decides** the right scaffold (hint vs explanation vs solution), **checks** teacher-defined safety rules, **acts** (respond, rewrite, or withhold), and **escalates** to a teacher when needed — while still supporting legitimate language mixing. Teachers configure which help levels are allowed in which languages. The contribution is a safe, goal-driven multilingual tutoring agent grounded in translanguaging theory, not just a multilingual chat interface.
+Many students learn better when they can mix languages (translanguaging), and recent work shows AI can act as a “multilingual buddy.” But today’s tools are mostly chatbots (sometimes with RAG): they reply without a deliberative safety loop. We propose TL-Guard — an **agentic** AI buddy with a frozen **Scaffold Map**, **context-grounded Act**, and Reflect rewrite/block — supporting legitimate language mixing without a teacher policy console as the product novelty.
 
 ### What “Agentic” Means in This Topic
 
-In this topic, **agentic** does **not** mean a free multi-agent swarm. It means the AI is a **goal-driven tutoring agent** with a closed decision loop, not a passive LLM chatbot:
+1. **Perceive** — language, mastery (BKT), switch intent.
+2. **Decide** — scaffold/language under frozen Scaffold Map.
+3. **Act** — retrieve curriculum KB, then constrained LLM.
+4. **Reflect** — leakage/scaffold post-check; research audit log only.
+5. **Remember** — session state across turns.
 
-1. **Perceive** — Detect language(s) used, student mastery (BKT), and whether the switch looks like learning help or answer-seeking.
-2. **Decide** — Choose scaffold tier and response language using the Language–Scaffold Matrix (teacher policy).
-3. **Act** — Deliver a hint / explanation / rewrite / block under pedagogical constraints.
-4. **Reflect / escalate** — Post-check for leakage across languages; if unsafe, escalate to the teacher queue.
-5. **Remember** — Carry learner state and policy across turns (session memory), so each reply depends on history, not only the last message.
-
-So the novelty is: **agentic tutoring behaviour + translanguaging support + pedagogical guardrails inside the agent loop**, together. Existing “multilingual buddy” work (e.g. KiKo-Prim) uses ChatGPT as a helper but without this agent loop or formal safety policy.
+Novelty: **agentic loop + translanguaging + fixed self-guardrails + context-grounded Act**. Independent of EduHarness.
 
 ---
 
@@ -421,7 +419,7 @@ This topic draws from four research streams that have developed largely independ
 | Pedagogical Safety | SafeTutors, SHAPE, Auditable Release Control — all English-only | Pedagogical safety constraints that account for multilingual interaction patterns |
 | Guardrail Systems | NeMo, EvalGuard, Cohorte — content safety and general policy | Pedagogical guardrails that enforce scaffold integrity *while supporting* translanguaging |
 
-**Specific gap statement:** No existing system integrates translanguaging pedagogy theory (García's Stance/Design/Shifts) into the design of an AI tutoring agent with formal pedagogical safety constraints. Current multilingual AI tutors support language mixing but lack guardrails against pedagogical harm. Current guardrail systems enforce content safety but are pedagogically unaware and treat language mixing as a potential attack vector rather than a legitimate learning resource.
+**Specific gap statement:** No existing system combines a deliberative tutoring *agent*, *fixed* self-guardrails for scaffold/language disclosure, and *context-grounded* Act under translanguaging — without requiring a teacher policy console. Current multilingual AI tutors support language mixing but lack closed Decide/Reflect safety. Current guardrail systems treat language mixing as a potential attack vector rather than a legitimate learning resource.
 
 The result is a design tension: **safety systems view code-switching as suspicious, while translanguaging pedagogy views it as essential.** No existing architecture resolves this tension.
 
@@ -432,17 +430,17 @@ The result is a design tension: **safety systems view code-switching as suspicio
 We propose **TL-Guard (TransLanguaging-Aware Guardrailed AI Buddy)**: an agentic AI tutoring architecture that:
 
 1. **Operationalizes translanguaging pedagogy** (García's Stance/Design/Shifts) as computational design principles for the AI agent's behavior.
-2. **Enforces pedagogical safety constraints** (scaffold integrity, leakage prevention, misconception avoidance) inside the agent loop (Decide / Act / Reflect) that is *language-aware but language-tolerant*.
+2. **Enforces pedagogical safety constraints** (scaffold integrity, leakage prevention) inside Decide / Act / Reflect via a frozen Scaffold Map.
 3. **Distinguishes legitimate translanguaging from adversarial language-switching** through intent classification and mastery-context analysis.
-4. **Supports teacher-defined multilingual policies** via YAML contracts that specify which languages are permitted, which scaffold tiers can be delivered in which languages, and when to escalate.
+4. **Grounds Act in local curriculum context** via lexical retrieval over a knowledge base, then calls the LLM as a tool.
 
 ---
 
 ### 4. Research Objectives
 
 - **RO1:** Operationalize García's translanguaging pedagogy framework (Stance/Design/Shifts) as design principles for AI tutoring agents.
-- **RO2:** Design and implement TL-Guard, a pedagogical safety architecture that supports translanguaging while preventing leakage, misconception reinforcement, and scaffolding collapse.
-- **RO3:** Define and validate a set of multilingual pedagogical policy constructs (language-scaffold matrix, translanguaging-aware disclosure contracts) that teachers can configure.
+- **RO2:** Design and implement TL-Guard, a self-guardrailed agentic buddy that supports translanguaging while preventing leakage and scaffolding collapse.
+- **RO3:** Define and validate multilingual pedagogical constructs (Scaffold Map, context-grounded Act, translanguaging-aware disclosure contracts) as fixed research artifacts.
 - **RO4:** Evaluate whether TL-Guard improves learning outcomes for multilingual learners compared to (a) English-only tutoring, (b) unguardrailed multilingual tutoring, and (c) safety-guardrailed English-only tutoring.
 
 ---
@@ -450,10 +448,10 @@ We propose **TL-Guard (TransLanguaging-Aware Guardrailed AI Buddy)**: an agentic
 ### 5. Key Research Questions
 
 - **RQ1:** How can translanguaging pedagogy principles (Stance, Design, Shifts) be computationally operationalized in an agentic AI tutoring architecture? *(Design science)*
-- **RQ2:** Can a language-scaffold matrix (specifying which scaffold tiers are available in which languages) maintain pedagogical safety while supporting legitimate translanguaging? *(Policy design)*
-- **RQ3:** Can the agent’s Decide + Reflect stages distinguish between legitimate translanguaging and adversarial language-switching in real-time, using mastery context and interaction history? *(Classification)*
-- **RQ4:** Does a guardrailed multilingual buddy improve learning outcomes (concept mastery, engagement, satisfaction) for multilingual learners compared to English-only and unguardrailed multilingual baselines? *(Efficacy)*
-- **RQ5:** What are the failure modes of TL-Guard, and under what conditions does the guardrail inappropriately suppress legitimate translanguaging? *(Boundary analysis)*
+- **RQ2:** Can a frozen Scaffold Map (language×scaffold matrix) maintain pedagogical safety while supporting legitimate translanguaging? *(Policy design)*
+- **RQ3:** Does context-grounded Act improve factual alignment without collapsing scaffold integrity under translanguaging? *(Grounding)*
+- **RQ4:** Can Decide + Reflect distinguish legitimate translanguaging from adversarial switching using mastery and history? *(Classification)*
+- **RQ5:** What are the failure modes of TL-Guard, and when does the guardrail incorrectly suppress legitimate translanguaging? *(Boundary analysis)*
 
 ---
 
@@ -593,13 +591,13 @@ We propose **TL-Guard (TransLanguaging-Aware Guardrailed AI Buddy)**: an agentic
 - Voice-based translanguaging buddy.
 - Extension to more language pairs (Tamil, Telugu, Mandarin, etc.).
 - Integration with Paper 1's XL-CRA framework.
-- Adaptive LSM policies that learn from teacher corrections over time.
+- Adaptive Scaffold Map updates from research audit logs (not a live teacher console).
 
 ---
 
 ### 13. Proposed Abstract (academic version)
 
-> Multilingual learners benefit from translanguaging — the fluid use of their full linguistic repertoire — yet current AI tutoring systems either enforce monolingual interaction or permit unguardrailed language mixing that degrades pedagogical safety. We propose **TL-Guard**, an agentic AI tutoring architecture that operationalizes García et al.'s translanguaging pedagogy framework (Stance, Design, Shifts) as computational design principles while enforcing pedagogical safety constraints inside a five-stage agentic decision loop (Perceive → Decide → Act → Reflect → Remember). Central to TL-Guard is the **Language-Scaffold Matrix (LSM)**, a teacher-configurable YAML policy that specifies which pedagogical scaffold tiers (pseudocode hint, conceptual explanation, worked example, full solution) are available in which languages, enabling controlled translanguaging rather than unconstrained language mixing. A **Language Intent Classifier** distinguishes legitimate translanguaging (driven by learning need) from adversarial language-switching (driven by extraction intent) using mastery context and interaction history. **Translanguaging-aware disclosure contracts** extend the auditable release control paradigm with language-specific authorization, preventing the AI from disclosing in one language what the pedagogical contract withholds in another. We evaluate TL-Guard across three language pairs (English–Hindi, English–Bengali, English–Spanish) in Python programming and mathematics tutoring, comparing four conditions: English-only, unguardrailed multilingual, content-safety-guardrailed, and TL-Guard. Results show that TL-Guard maintains [X]% scaffold policy compliance while correctly permitting [Y]% of legitimate translanguaging instances, achieving [Z]% higher mastery gains than English-only tutoring for multilingual learners. To our knowledge, this is the first system to integrate translanguaging pedagogy theory with formal pedagogical safety constraints in an AI tutoring agent.
+> Multilingual learners benefit from translanguaging — the fluid use of their full linguistic repertoire — yet current AI tutoring systems either enforce monolingual interaction or permit unguardrailed language mixing that degrades pedagogical safety. We propose **TL-Guard**, an agentic AI tutoring buddy that operationalizes García et al.'s Stance/Design/Shifts inside a five-stage decision loop (Perceive → Decide → Act → Reflect → Remember). Central to TL-Guard is a frozen **Scaffold Map** (language×scaffold authorization) and **context-grounded Act** (local KB retrieve before the LLM tool). A Language Intent Classifier distinguishes legitimate clarification from adversarial answer-seeking. Translanguaging-aware disclosure contracts mitigate cross-lingual leakage. There is no teacher policy console as a contribution. Evaluation covers Scaffold Map compliance, retrieval grounding, and legitimate/adversarial trajectories across English–Hindi, English–Bengali, and English–Spanish tutoring settings.
 
 ---
 
@@ -627,13 +625,13 @@ We propose **TL-Guard (TransLanguaging-Aware Guardrailed AI Buddy)**: an agentic
 |---------|-------------------|---------------------|
 | Primary theory | CRA (2026) + Cross-lingual safety | Translanguaging pedagogy (García, 2017) |
 | Research type | Empirical evaluation + framework | Design science + empirical evaluation |
-| Artifact | XL-CRA session layer + XL-CRA-Bench | TL-Guard architecture + LSM policy |
-| Attack model | Adversarial students exploiting language switches | N/A (assumes good-faith learners, but measures accidental leakage) |
-| Safety focus | Detection and mitigation of accumulated risk | Prevention by design + runtime enforcement |
+| Artifact | XL-CRA session layer + XL-CRA-Bench | TL-Guard agent + Scaffold Map + KB |
+| Attack model | Adversarial students exploiting language switches | Measures accidental/adversarial leakage under self-guardrails |
+| Safety focus | Detection and mitigation of accumulated risk | Prevention by design + runtime self-enforcement |
 | Language pairs | En–Hi, En–Bn, En–Es (shared for comparability) | En–Hi, En–Bn, En–Es (shared) |
-| Domains | Python, math, general science | Python, math |
+| Domains | Python, math, general science | Python, math, science |
 | Shared infrastructure | Complementary themes only | Independent TL-Guard agent (no EduHarness) |
-| How they connect | Paper 1's XL-CRA score can be integrated as a signal in Paper 2's architecture | Paper 2's LSM policy defines the "authorized" baseline that Paper 1 monitors for violations |
+| How they connect | Paper 1's XL-CRA score can later inform Paper 2 Reflect | Paper 2's Scaffold Map defines authorized baseline Paper 1 can monitor |
 
 ---
 
